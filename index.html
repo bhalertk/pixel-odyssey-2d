@@ -19,8 +19,9 @@
         <div class="menu-help">
           <strong>操作說明</strong>
           <span>A / D 移動・W / S（2D）探索</span>
-          <span>左鍵攻擊・按住 E 防禦・防禦時左鍵盾反</span>
+          <span>左鍵攻擊（間隔 1 秒）・E 舉盾 0.3 秒（間隔 1 秒）</span>
           <span>C 切換 2D・F 對話／互動・G 賭錢</span>
+          <span>R 使用生命藥水・X 重新開始</span>
         </div>
         <div class="audio-settings">
           <label><input id="menu-sound-enabled" type="checkbox" checked /> 開啟音效</label>
@@ -41,11 +42,13 @@
         <canvas id="game" width="960" height="540" aria-label="遊戲畫面"></canvas>
         <div class="controls">
           <span><b>A / D</b> 移動</span>
-          <span><b>滑鼠左鍵</b> 攻擊／盾反</span>
-          <span><b>按住 E</b> 防禦</span>
+          <span><b>滑鼠左鍵</b> 攻擊／盾反（間隔 1 秒）</span>
+          <span><b>E</b> 舉盾 0.3 秒／反震敵人（間隔 1 秒）</span>
           <span><b>C</b> 切換維度</span>
           <span><b>F</b> 對話／商店</span>
           <span><b>G</b> 賭錢</span>
+          <span><b>R</b> 使用生命藥水</span>
+          <span><b>X</b> 重新開始</span>
         </div>
         <div class="touch-controls" aria-label="螢幕操作">
           <button type="button" data-control="a">◀</button>
@@ -65,9 +68,9 @@
       </section>
       <section id="shop" class="shop" hidden aria-label="商人商店">
         <strong>商人：用金錢換取冒險物資</strong>
-        <button data-item="armor">防具（30 金）</button>
-        <button data-item="potion">生命藥水（20 金）</button>
-        <button data-item="weapon">強化武器（50 金）</button>
+        <button data-item="armor">防具（45 金）</button>
+        <button data-item="potion">生命藥水（30 金）</button>
+        <button data-item="weapon">強化武器（75 金）</button>
       </section>
       <section id="betting" class="shop betting" hidden aria-label="賭錢遊戲">
         <strong>幸運硬幣：猜正反</strong>
@@ -75,7 +78,7 @@
         <button data-guess="正面">猜正面</button>
         <button data-guess="反面">猜反面</button>
       </section>
-      <button id="restart" class="restart" type="button">重新開始（R）</button>
+      <button id="restart" class="restart" type="button">重新開始（X）</button>
       <div class="save-controls">
         <button id="load-save" type="button">讀取進度</button>
         <button id="clear-save" type="button">清除存檔</button>

@@ -1,5 +1,12 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
+const W = 960;
+const H = 540;
+const renderScale = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = W * renderScale;
+canvas.height = H * renderScale;
+ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+ctx.imageSmoothingEnabled = false;
 canvas.tabIndex = 0;
 const message = document.querySelector("#message");
 const bodyColorInput = document.querySelector("#body-color");
@@ -24,14 +31,18 @@ const SAVE_KEY = "pixel-odyssey-2d-save";
 const AUDIO_SETTINGS_KEY = "pixel-odyssey-2d-audio";
 const audioSettings = { enabled: true, volume: 0.6 };
 
-const W = canvas.width;
-const H = canvas.height;
 const keys = new Set();
 const projectiles = [];
 const particles = [];
 const floatingTexts = [];
 let audioContext;
 let screenShake = 0;
+const ambientMotes = Array.from({ length: 44 }, (_, index) => ({
+  x: (index * 173 + 41) % W,
+  y: 82 + ((index * 97) % 278),
+  size: 1 + (index % 3),
+  phase: index * 0.73,
+}));
 const player = { x: 150, y: 370, size: 30, speed: 3.2, hp: 3, maxHp: 3, facing: 1, money: 0, armor: false, weaponLevel: 1, potions: 0 };
 const elder = { x: 730, y: 370, size: 36 };
 const merchant = { x: 820, y: 370, size: 32 };
@@ -43,19 +54,33 @@ const shards = [
 const dimensionGate = { x: 480, y: 250, unlocked: false };
 const ruinCore = { x: 760, y: 250, collected: false };
 const ruinRunes = [
-  { x: 220, y: 180, collected: false },
-  { x: 420, y: 120, collected: false },
-  { x: 680, y: 180, collected: false },
+  { x: 220, y: 180, glyph: "日", collected: false, nearby: false },
+  { x: 420, y: 120, glyph: "月", collected: false, nearby: false },
+  { x: 680, y: 180, glyph: "星", collected: false, nearby: false },
 ];
+const RUIN_RUNE_SEQUENCE = [1, 2, 0];
 const ruinExit = { x: 900, y: 370, unlocked: false };
 const sanctumExit = { x: 900, y: 370, unlocked: false };
+const SANCTUM_SIGIL_START = [false, true, false];
 const sanctumShards = [
-  { x: 240, y: 160, collected: false },
-  { x: 520, y: 280, collected: false },
-  { x: 760, y: 150, collected: false },
+  { x: 240, y: 160, active: SANCTUM_SIGIL_START[0], nearby: false },
+  { x: 520, y: 280, active: SANCTUM_SIGIL_START[1], nearby: false },
+  { x: 760, y: 150, active: SANCTUM_SIGIL_START[2], nearby: false },
 ];
 const sanctumEnemy = { type: "聖堂守護者", color: "#d5b35c", x: 580, y: 370, size: 44, hp: 9, maxHp: 9, speed: 0.65, range: 105, cooldown: 1.4, startX: 580, startY: 370, active: false, attackCooldown: 1.4, attackWindup: 0, stunned: 0, hitFlash: 0 };
 const ruinEnemy = { type: "遺跡守衛", color: "#a86b9b", x: 600, y: 370, size: 36, hp: 6, maxHp: 6, speed: 0.7, range: 92, cooldown: 1.5, startX: 600, startY: 370, active: false, attackCooldown: 1.5, attackWindup: 0, stunned: 0, hitFlash: 0 };
+const frostExit = { x: 900, y: 370, unlocked: false };
+const frostSeals = [
+  { x: 210, y: 165, collected: false },
+  { x: 485, y: 275, collected: false },
+  { x: 745, y: 145, collected: false },
+];
+const frostEnemies = [
+  { type: "霜牙獸", attackType: "leap", color: "#78bfe8", x: 500, y: 370, size: 34, hp: 6, maxHp: 6, speed: 1.15, range: 90, cooldown: 1.45, damage: 1 },
+  { type: "寒晶術士", attackType: "ranged", color: "#9ee7ff", x: 690, y: 370, size: 31, hp: 5, maxHp: 5, speed: 0.45, range: 250, cooldown: 1.8, damage: 1 },
+].map((enemy) => ({ ...enemy, startX: enemy.x, startY: enemy.y, active: false, attackCooldown: enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
+const voidExit = { x: 900, y: 370, unlocked: false };
+const voidBoss = { type: "虛空君王", attackType: "void", color: "#7f55d9", x: 610, y: 370, size: 68, hp: 18, maxHp: 18, speed: 0.62, range: 230, cooldown: 1.6, damage: 1.5, startX: 610, startY: 370, active: false, attackCooldown: 1.6, attackWindup: 0, stunned: 0, hitFlash: 0 };
 const enemies = [
   { type: "追獵者", attackType: "melee", color: "#b54868", x: 390, y: 370, size: 28, hp: 3, maxHp: 3, speed: 1.05, range: 78, cooldown: 1.5, damage: 1 },
   { type: "迅捷者", attackType: "dash", color: "#d77b45", x: 500, y: 370, size: 23, hp: 2, maxHp: 2, speed: 1.75, range: 65, cooldown: 1.1, damage: 1 },
@@ -74,14 +99,16 @@ const state = {
   eyeColor: eyeColorInput.value,
   dimension: "1D",
   hasSword: true,
-  hasShield: false,
+  hasShield: true,
   elderTalked: false,
   dialog: false,
   tutorialStep: 0,
   attackTimer: 0,
+  swordCooldown: 0,
   comboCount: 0,
   comboTimer: 0,
   shieldTimer: 0,
+  shieldCooldown: 0,
   modeTimer: 0,
   cooldown: 0,
   gameOver: false,
@@ -95,10 +122,15 @@ const state = {
   ruinObjectiveComplete: false,
   ruinRuneCount: 0,
   sanctumMap: false,
-  sanctumShardCount: 0,
+  sanctumShardCount: 1,
+  frostMap: false,
+  frostDefeated: 0,
+  frostSealCount: 0,
+  voidMap: false,
+  voidBossDefeated: false,
   regenTimer: 5,
   lastTime: performance.now(),
-  notice: "前往老人身邊，按 F 開始對話。",
+  notice: "盾牌可直接按 E 使用；前往老人身邊按 F 開始教學。",
 };
 
 function setMessage(text) {
@@ -131,18 +163,18 @@ function updateParticles(dt) {
     particle.life -= dt;
     if (particle.life <= 0) particles.splice(index, 1);
   }
+}
 
-  function emitFloatingText(text, x, y, color = "#f4f0df") {
-    floatingTexts.push({ text, x, y, color, life: 0.9, maxLife: 0.9 });
-  }
+function emitFloatingText(text, x, y, color = "#f4f0df") {
+  floatingTexts.push({ text, x, y, color, life: 0.9, maxLife: 0.9 });
+}
 
-  function updateFloatingTexts(dt) {
-    for (let index = floatingTexts.length - 1; index >= 0; index -= 1) {
-      const item = floatingTexts[index];
-      item.y -= 24 * dt;
-      item.life -= dt;
-      if (item.life <= 0) floatingTexts.splice(index, 1);
-    }
+function updateFloatingTexts(dt) {
+  for (let index = floatingTexts.length - 1; index >= 0; index -= 1) {
+    const item = floatingTexts[index];
+    item.y -= 24 * dt;
+    item.life -= dt;
+    if (item.life <= 0) floatingTexts.splice(index, 1);
   }
 }
 
@@ -190,8 +222,14 @@ function saveGame(announce = true) {
       ruinObjectiveComplete: state.ruinObjectiveComplete,
       ruinRuneCount: state.ruinRuneCount,
       sanctumMap: state.sanctumMap, sanctumShardCount: state.sanctumShardCount,
+      frostMap: state.frostMap, frostDefeated: state.frostDefeated,
+      frostSealCount: state.frostSealCount, voidMap: state.voidMap,
+      voidBossDefeated: state.voidBossDefeated,
     },
     shards: shards.map((shard) => shard.collected),
+    ruinRunes: ruinRunes.map((rune) => rune.collected),
+    sanctumSigils: sanctumShards.map((sigil) => sigil.active),
+    frostSeals: frostSeals.map((seal) => seal.collected),
     dimensionGateUnlocked: dimensionGate.unlocked,
     ruinCoreCollected: ruinCore.collected,
     enemies: enemies.map((enemy) => ({
@@ -213,6 +251,16 @@ function saveGame(announce = true) {
       x: sanctumEnemy.x, y: sanctumEnemy.y, hp: sanctumEnemy.hp, active: sanctumEnemy.active,
       attackCooldown: sanctumEnemy.attackCooldown, attackWindup: sanctumEnemy.attackWindup,
       stunned: sanctumEnemy.stunned,
+    },
+    frostEnemies: frostEnemies.map((enemy) => ({
+      x: enemy.x, y: enemy.y, hp: enemy.hp, active: enemy.active,
+      attackCooldown: enemy.attackCooldown, attackWindup: enemy.attackWindup,
+      stunned: enemy.stunned,
+    })),
+    voidBoss: {
+      x: voidBoss.x, y: voidBoss.y, hp: voidBoss.hp, active: voidBoss.active,
+      attackCooldown: voidBoss.attackCooldown, attackWindup: voidBoss.attackWindup,
+      stunned: voidBoss.stunned,
     },
     savedAt: new Date().toISOString(),
   };
@@ -249,8 +297,10 @@ function loadGame() {
     if (!save || typeof save !== "object" || !save.player || !save.state) {
       throw new Error("Invalid save format");
     }
+    const legacyEnding = save.state.worldReturned === true && !("frostMap" in save.state);
     Object.assign(player, save.player);
-    Object.assign(state, save.state, { gameOver: false, dialog: false, attackTimer: 0, shieldTimer: 0, comboCount: 0, comboTimer: 0, lastTime: performance.now() });
+    Object.assign(state, save.state, { gameOver: false, dialog: false, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, lastTime: performance.now() });
+    state.hasShield = true;
     state.bodyColor = player.bodyColor || state.bodyColor;
     state.eyeColor = player.eyeColor || state.eyeColor;
     bodyColorInput.value = state.bodyColor;
@@ -267,19 +317,59 @@ function loadGame() {
     }
     restoreCombatant(ruinEnemy, save.ruinEnemy);
     restoreCombatant(sanctumEnemy, save.sanctumEnemy);
+    if (Array.isArray(save.frostEnemies)) {
+      frostEnemies.forEach((enemy, index) => restoreCombatant(enemy, save.frostEnemies[index]));
+    }
+    restoreCombatant(voidBoss, save.voidBoss);
     state.ruinRuneCount = Number.isFinite(save.state.ruinRuneCount) ? save.state.ruinRuneCount : 0;
-    ruinRunes.forEach((rune, index) => { rune.collected = index < state.ruinRuneCount; });
+    const savedRunes = Array.isArray(save.ruinRunes) ? save.ruinRunes : [];
+    ruinRunes.forEach((rune, index) => {
+      rune.collected = savedRunes.length > 0
+        ? Boolean(savedRunes[index])
+        : RUIN_RUNE_SEQUENCE.slice(0, state.ruinRuneCount).includes(index);
+      rune.nearby = false;
+    });
+    state.ruinRuneCount = ruinRunes.filter((rune) => rune.collected).length;
     ruinExit.unlocked = state.ruinRuneCount === ruinRunes.length;
     state.sanctumMap = Boolean(save.state.sanctumMap);
-    state.sanctumShardCount = Number.isFinite(save.state.sanctumShardCount) ? save.state.sanctumShardCount : 0;
-    sanctumShards.forEach((shard, index) => { shard.collected = index < state.sanctumShardCount; });
+    const savedSigils = Array.isArray(save.sanctumSigils) ? save.sanctumSigils : null;
+    sanctumShards.forEach((sigil, index) => {
+      sigil.active = savedSigils
+        ? Boolean(savedSigils[index])
+        : save.state.sanctumShardCount === sanctumShards.length || SANCTUM_SIGIL_START[index];
+      sigil.nearby = false;
+    });
+    state.sanctumShardCount = sanctumShards.filter((sigil) => sigil.active).length;
     sanctumExit.unlocked = state.sanctumShardCount === sanctumShards.length;
+    state.frostMap = Boolean(save.state.frostMap || legacyEnding);
+    if (legacyEnding) {
+      state.worldReturned = false;
+      player.x = 120;
+      player.y = 370;
+    }
+    state.frostDefeated = Number.isFinite(save.state.frostDefeated) ? save.state.frostDefeated : 0;
+    const savedFrostSeals = Array.isArray(save.frostSeals) ? save.frostSeals : [];
+    frostSeals.forEach((seal, index) => { seal.collected = Boolean(savedFrostSeals[index]); });
+    state.frostSealCount = frostSeals.filter((seal) => seal.collected).length;
+    frostExit.unlocked = state.frostDefeated >= frostEnemies.length && state.frostSealCount === frostSeals.length;
+    state.voidMap = Boolean(save.state.voidMap);
+    state.voidBossDefeated = Boolean(save.state.voidBossDefeated || voidBoss.hp <= 0);
+    voidExit.unlocked = state.voidBossDefeated;
     projectiles.length = 0;
     enemies.forEach((enemy) => { enemy.active = false; });
     bosses.forEach((boss) => { boss.active = false; });
     ruinEnemy.active = Boolean(state.nextMap && !state.ruinObjectiveComplete && ruinEnemy.hp > 0);
     sanctumEnemy.active = Boolean(state.sanctumMap && sanctumEnemy.hp > 0);
-    if (state.sanctumMap || state.worldReturned) {
+    frostEnemies.forEach((enemy, index) => {
+      enemy.active = Boolean(state.frostMap && index === state.frostDefeated && enemy.hp > 0);
+    });
+    voidBoss.active = Boolean(state.voidMap && !state.voidBossDefeated && voidBoss.hp > 0);
+    if (state.frostMap || state.voidMap || state.worldReturned) {
+      sanctumEnemy.active = false;
+      ruinEnemy.active = false;
+      enemies.forEach((enemy) => { enemy.active = false; });
+      bosses.forEach((boss) => { boss.active = false; });
+    } else if (state.sanctumMap) {
       ruinEnemy.active = false;
       enemies.forEach((enemy) => { enemy.active = false; });
       bosses.forEach((boss) => { boss.active = false; });
@@ -317,14 +407,16 @@ function clearSave() {
 function resetGame() {
   Object.assign(player, { x: 150, y: 370, hp: 3, maxHp: 3, facing: 1, money: 0, armor: false, weaponLevel: 1, potions: 0 });
   Object.assign(state, {
-    dimension: "1D", hasSword: true, hasShield: false, elderTalked: false, dialog: false,
-    tutorialStep: 0, attackTimer: 0, shieldTimer: 0, comboCount: 0, comboTimer: 0, modeTimer: 0, cooldown: 0,
+    dimension: "1D", hasSword: true, hasShield: true, elderTalked: false, dialog: false,
+    tutorialStep: 0, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, modeTimer: 0, cooldown: 0,
     gameOver: false, defeatedEnemies: 0, defeatedBosses: 0, bossPhase: false,
     worldReturned: false, nextMap: false, shardCount: 0, bossRestTimer: 0,
     regenTimer: 5, lastTime: performance.now(),
     ruinObjectiveComplete: false,
     ruinRuneCount: 0,
-    sanctumMap: false, sanctumShardCount: 0,
+    sanctumMap: false, sanctumShardCount: 1,
+    frostMap: false, frostDefeated: 0, frostSealCount: 0,
+    voidMap: false, voidBossDefeated: false,
   });
   screenShake = 0;
   shards.forEach((shard) => { shard.collected = false; });
@@ -354,10 +446,13 @@ function resetGame() {
     attackCooldown: ruinEnemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
   });
   ruinCore.collected = false;
-  ruinRunes.forEach((rune) => { rune.collected = false; });
+  ruinRunes.forEach((rune) => { rune.collected = false; rune.nearby = false; });
   ruinExit.unlocked = false;
   sanctumExit.unlocked = false;
-  sanctumShards.forEach((shard) => { shard.collected = false; });
+  sanctumShards.forEach((sigil, index) => {
+    sigil.active = SANCTUM_SIGIL_START[index];
+    sigil.nearby = false;
+  });
   Object.assign(sanctumEnemy, {
     x: sanctumEnemy.startX, y: sanctumEnemy.startY, hp: sanctumEnemy.maxHp, active: false,
     attackCooldown: sanctumEnemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
@@ -368,7 +463,7 @@ function resetGame() {
   floatingTexts.length = 0;
   shop.hidden = true;
   betting.hidden = true;
-  setMessage("遊戲已重新開始。前往老人身邊，按 F 開始對話。");
+  setMessage("遊戲已重新開始。盾牌可直接按 E 使用；前往老人身邊按 F 開始教學。");
 }
 
 function showGame() {
@@ -449,7 +544,7 @@ function placeBet(guess) {
 }
 
 function buyItem(item) {
-  const prices = { armor: 30, potion: 20, weapon: 50 };
+  const prices = { armor: 45, potion: 30, weapon: 75 };
   const names = { armor: "防具", potion: "生命藥水", weapon: "強化武器" };
   if (player.money < prices[item]) {
     setMessage(`${names[item]}需要 ${prices[item]} 金，你目前只有 ${player.money} 金。`);
@@ -461,7 +556,7 @@ function buyItem(item) {
     setMessage("你買下防具，受到的傷害會降低。");
   } else if (item === "potion") {
     player.potions += 1;
-    setMessage("你買下生命藥水，按 P 使用。");
+    setMessage("你買下生命藥水，按 R 使用。");
   } else {
     player.weaponLevel += 1;
     setMessage("武器強化成功，劍的傷害提升！");
@@ -512,7 +607,7 @@ function enterDimensionGate() {
 }
 
 function collectShards() {
-  if (state.dimension !== "2D") return;
+  if (state.dimension !== "2D" || state.nextMap || state.sanctumMap || state.frostMap || state.voidMap) return;
   shards.forEach((shard) => {
     if (!shard.collected && Math.hypot(player.x - shard.x, player.y - shard.y) < 32) {
       shard.collected = true;
@@ -529,47 +624,154 @@ function collectShards() {
 }
 
 function collectRuinRunes() {
-  if (!state.nextMap) return;
-  ruinRunes.forEach((rune) => {
-    if (!rune.collected && Math.hypot(player.x - rune.x, player.y - rune.y) < 32) {
-      rune.collected = true;
-      state.ruinRuneCount += 1;
-      playSound(700, 0.1, "sine");
-      setMessage(`取得遺跡符文 ${state.ruinRuneCount} / ${ruinRunes.length}。`);
+  if (!state.nextMap || !state.ruinObjectiveComplete || ruinExit.unlocked) return;
+  ruinRunes.forEach((rune, index) => {
+    const isNearby = Math.hypot(player.x - rune.x, player.y - rune.y) < 32;
+    if (isNearby && !rune.nearby && !rune.collected) {
+      const expectedIndex = RUIN_RUNE_SEQUENCE[state.ruinRuneCount];
+      if (index === expectedIndex) {
+        rune.collected = true;
+        state.ruinRuneCount += 1;
+        playSound(700 + state.ruinRuneCount * 80, 0.12, "sine");
+        setMessage(`符文「${rune.glyph}」亮起（${state.ruinRuneCount} / ${ruinRunes.length}）。`);
+      } else {
+        ruinRunes.forEach((item) => { item.collected = false; });
+        state.ruinRuneCount = 0;
+        playSound(120, 0.18, "sawtooth");
+        setMessage("符文順序錯誤，光芒熄滅了。提示：月 → 星 → 日。");
+      }
     }
+    rune.nearby = isNearby;
   });
+  frostSeals.forEach((seal) => { seal.collected = false; });
+  frostExit.unlocked = false;
+  frostEnemies.forEach((enemy) => {
+    Object.assign(enemy, {
+      x: enemy.startX, y: enemy.startY, hp: enemy.maxHp, active: false,
+      attackCooldown: enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+    });
+  });
+  Object.assign(voidBoss, {
+    x: voidBoss.startX, y: voidBoss.startY, hp: voidBoss.maxHp, active: false,
+    attackCooldown: voidBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+  });
+  voidExit.unlocked = false;
   if (state.ruinRuneCount === ruinRunes.length && !ruinExit.unlocked) {
     ruinExit.unlocked = true;
-    setMessage("三枚遺跡符文共鳴，遺跡出口已解鎖！");
+    setMessage("月、星、日依序共鳴，遺跡出口已解鎖！");
   }
 }
 
 function collectSanctumShards() {
-  if (!state.sanctumMap) return;
-  sanctumShards.forEach((shard) => {
-    if (!shard.collected && Math.hypot(player.x - shard.x, player.y - shard.y) < 32) {
-      shard.collected = true;
-      state.sanctumShardCount += 1;
-      playSound(760, 0.1, "sine");
-      setMessage(`取得核心碎片 ${state.sanctumShardCount} / ${sanctumShards.length}。`);
+  if (!state.sanctumMap || sanctumEnemy.hp > 0 || sanctumExit.unlocked) return;
+  sanctumShards.forEach((sigil, index) => {
+    const isNearby = Math.hypot(player.x - sigil.x, player.y - sigil.y) < 34;
+    if (isNearby && !sigil.nearby) {
+      [index - 1, index, index + 1].forEach((targetIndex) => {
+        const target = sanctumShards[targetIndex];
+        if (target) target.active = !target.active;
+      });
+      state.sanctumShardCount = sanctumShards.filter((item) => item.active).length;
+      playSound(520 + state.sanctumShardCount * 90, 0.14, "triangle");
+      setMessage(`連動印記發生變化，目前點亮 ${state.sanctumShardCount} / ${sanctumShards.length}。`);
     }
+    sigil.nearby = isNearby;
   });
   if (state.sanctumShardCount === sanctumShards.length && !sanctumExit.unlocked) {
     sanctumExit.unlocked = true;
-    setMessage("核心碎片共鳴，核心聖堂出口已解鎖！");
+    setMessage("三枚連動印記全部點亮，核心聖堂出口已解鎖！");
+  }
+}
+
+function collectFrostSeals() {
+  if (!state.frostMap || state.frostDefeated < frostEnemies.length || state.dimension !== "2D") return;
+  frostSeals.forEach((seal) => {
+    if (!seal.collected && Math.hypot(player.x - seal.x, player.y - seal.y) < 34) {
+      seal.collected = true;
+      state.frostSealCount += 1;
+      emitParticles(seal.x, seal.y, "#9ee7ff", 18, 2.8);
+      playSound(680 + state.frostSealCount * 70, 0.13, "sine");
+      setMessage(`取得寒霜印記 ${state.frostSealCount} / ${frostSeals.length}。`);
+    }
+  });
+  if (state.frostSealCount === frostSeals.length && !frostExit.unlocked) {
+    frostExit.unlocked = true;
+    setMessage("三枚寒霜印記融入門扉，通往虛空王座的道路已開啟！");
   }
 }
 
 function interact() {
+  if (state.voidMap) {
+    if (voidExit.unlocked && Math.hypot(player.x - voidExit.x, player.y - voidExit.y) < 85) {
+      state.voidMap = false;
+      state.worldReturned = true;
+      projectiles.length = 0;
+      voidBoss.active = false;
+      setMessage("虛空君王已敗，你穿過最終出口回到了正常世界！");
+    } else if (!voidExit.unlocked) {
+      setMessage("最終出口被虛空封印，先擊敗虛空君王。");
+    } else {
+      setMessage("靠近最終出口後按 F。");
+    }
+    return;
+  }
+  if (state.frostMap) {
+    if (frostExit.unlocked && Math.hypot(player.x - frostExit.x, player.y - frostExit.y) < 85) {
+      state.frostMap = false;
+      state.voidMap = true;
+      state.dimension = "1D";
+      state.modeTimer = 0;
+      state.cooldown = 0;
+      projectiles.length = 0;
+      frostEnemies.forEach((enemy) => { enemy.active = false; });
+      state.voidBossDefeated = false;
+      voidExit.unlocked = false;
+      Object.assign(voidBoss, {
+        x: voidBoss.startX, y: voidBoss.startY, hp: voidBoss.maxHp,
+        attackCooldown: voidBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+      });
+      voidBoss.active = true;
+      player.x = 120;
+      player.y = 370;
+      setMessage("你越過冰封門扉，抵達第五張地圖：虛空王座。虛空君王甦醒了！");
+    } else if (!frostExit.unlocked) {
+      setMessage(state.frostDefeated < frostEnemies.length
+        ? "冰封出口鎖定中，先擊敗裂谷中的敵人。"
+        : "冰封出口鎖定中，進入 2D 維度收集三枚寒霜印記。");
+    } else {
+      setMessage("靠近冰封出口後按 F。");
+    }
+    return;
+  }
   if (state.sanctumMap) {
     if (sanctumExit.unlocked && Math.hypot(player.x - sanctumExit.x, player.y - sanctumExit.y) < 85) {
       state.sanctumMap = false;
-      state.worldReturned = true;
+      state.frostMap = true;
+      state.dimension = "1D";
+      state.modeTimer = 0;
+      state.cooldown = 0;
       projectiles.length = 0;
       sanctumEnemy.active = false;
-      setMessage("你離開核心聖堂，回到了正常世界！");
+      state.frostDefeated = 0;
+      state.frostSealCount = 0;
+      frostExit.unlocked = false;
+      frostSeals.forEach((seal) => { seal.collected = false; });
+      frostEnemies.forEach((enemy, index) => {
+        enemy.x = enemy.startX;
+        enemy.y = enemy.startY;
+        enemy.hp = enemy.maxHp;
+        enemy.attackCooldown = enemy.cooldown;
+        enemy.attackWindup = 0;
+        enemy.stunned = 0;
+        enemy.active = index === 0;
+      });
+      player.x = 120;
+      player.y = 370;
+      setMessage("你離開核心聖堂，抵達第四張地圖：冰封裂谷。霜牙獸出現了！");
     } else if (!sanctumExit.unlocked) {
-      setMessage("核心聖堂出口鎖定中，先收集三枚核心碎片。");
+      setMessage(sanctumEnemy.hp > 0
+        ? "核心聖堂出口鎖定中，先擊敗聖堂守護者。"
+        : "核心聖堂出口鎖定中，踩踏連動印記並將三枚全部點亮。");
     } else {
       setMessage("靠近核心聖堂出口後按 F。");
     }
@@ -583,11 +785,19 @@ function interact() {
       projectiles.length = 0;
       ruinEnemy.active = false;
       sanctumEnemy.active = true;
+      sanctumShards.forEach((sigil, index) => {
+        sigil.active = SANCTUM_SIGIL_START[index];
+        sigil.nearby = false;
+      });
+      state.sanctumShardCount = sanctumShards.filter((sigil) => sigil.active).length;
+      sanctumExit.unlocked = false;
       player.x = 120;
       player.y = 370;
       setMessage("你穿過遺跡出口，抵達第三張地圖：核心聖堂。");
     } else if (!ruinExit.unlocked) {
-      setMessage("遺跡出口鎖定中，先收集三枚遺跡符文。");
+      setMessage(state.ruinObjectiveComplete
+        ? "遺跡出口鎖定中，依照月 → 星 → 日的順序點亮符文。"
+        : "遺跡出口鎖定中，先擊敗守衛並取得核心。");
     } else {
       setMessage("靠近遺跡出口後按 F。");
     }
@@ -614,8 +824,8 @@ function interact() {
       "",
       "老人：先學會這個世界的規則吧。按 F 繼續。",
       "老人：A / D 可以左右移動，滑鼠左鍵可以使用劍。按 F 繼續。",
-      "老人：按住 E 可以舉盾，防禦時按滑鼠左鍵可以盾反。按 F 繼續。",
-      "老人：按 C 進入 2D 維度，使用 W / A / S / D 探索。現在收下盾牌吧！",
+      "老人：按 E 可以舉盾 0.3 秒，擋下攻擊會反震並暈眩敵人。按 F 繼續。",
+      "老人：按 C 進入 2D 維度，使用 W / A / S / D 探索。盾牌已經備妥！",
     ];
     setMessage(lessons[state.tutorialStep]);
     if (state.tutorialStep === 4) {
@@ -638,22 +848,14 @@ function interact() {
 
 function attackOrParry() {
   if (state.gameOver || state.worldReturned) return;
-  if (state.hasShield && keys.has("e")) {
+  if (isShieldActive()) {
     state.comboCount = 0;
     state.comboTimer = 0;
-    state.shieldTimer = 0.35;
     const target = getCombatants().find((enemy) =>
       enemy.active && enemy.attackWindup > 0 && distanceToEnemy(enemy) < 115 && shieldFacesEnemy(enemy)
     );
     if (target) {
-      target.attackWindup = 0;
-      target.stunned = 1.2;
-      target.x += player.x < target.x ? 75 : -75;
-      emitParticles(target.x, target.y, "#85d7d0", 14, 3.2);
-      emitFloatingText("盾反！", target.x, target.y - target.size, "#85d7d0");
-      screenShake = 0.18;
-      playSound(180, 0.14, "triangle");
-      setMessage(`盾反成功！${target.type} 的攻擊被擋下並擊退。`);
+      repelEnemy(target, "盾反");
     } else {
       setMessage("盾反姿態！請在敵人亮起警示時按左鍵。");
     }
@@ -663,6 +865,11 @@ function attackOrParry() {
     setMessage("你沒有武器，先向老人換取盾牌。");
     return;
   }
+  if (state.swordCooldown > 0) {
+    setMessage(`劍還需要 ${state.swordCooldown.toFixed(1)} 秒才能再次使用。`);
+    return;
+  }
+  state.swordCooldown = 1;
   state.attackTimer = 0.22;
   playSound(420, 0.06);
   const target = getCombatants().find((enemy) =>
@@ -697,6 +904,8 @@ function distanceToEnemy(enemy) {
 }
 
 function getCombatants() {
+  if (state.voidMap) return [voidBoss];
+  if (state.frostMap) return frostEnemies;
   if (state.sanctumMap) return [sanctumEnemy];
   if (state.nextMap) return [ruinEnemy];
   return state.bossPhase ? bosses : enemies;
@@ -705,6 +914,42 @@ function getCombatants() {
 function shieldFacesEnemy(enemy) {
   const horizontalDirection = Math.sign(enemy.x - player.x);
   return horizontalDirection === 0 || horizontalDirection === player.facing;
+}
+
+function isShieldActive() {
+  return state.hasShield && state.shieldTimer > 0;
+}
+
+function activateShield() {
+  if (state.gameOver || state.worldReturned) return;
+  if (!state.hasShield) {
+    setMessage("你還沒有盾牌，先完成老人的教學。");
+    return;
+  }
+  if (state.shieldCooldown > 0) {
+    setMessage(`盾牌還需要 ${state.shieldCooldown.toFixed(1)} 秒才能再次使用。`);
+    return;
+  }
+  state.shieldTimer = 0.3;
+  state.shieldCooldown = 1;
+  state.comboCount = 0;
+  state.comboTimer = 0;
+  playSound(230, 0.1, "triangle");
+  setMessage("盾牌展開 0.3 秒！正面擋下攻擊會反震敵人。");
+}
+
+function repelEnemy(enemy, label = "反震") {
+  if (!enemy || !enemy.active || enemy.hp <= 0) return;
+  const direction = Math.sign(enemy.x - player.x) || player.facing;
+  enemy.x = Math.max(55, Math.min(W - 55, enemy.x + direction * 90));
+  enemy.attackWindup = 0;
+  enemy.attackCooldown = Math.max(enemy.attackCooldown, enemy.cooldown * 0.75);
+  enemy.stunned = Math.max(enemy.stunned, 1.25);
+  emitParticles(enemy.x, enemy.y, "#85d7d0", 16, 3.4);
+  emitFloatingText(`${label}！`, enemy.x, enemy.y - enemy.size, "#b8fff5");
+  screenShake = 0.2;
+  playSound(160, 0.16, "triangle");
+  setMessage(`${label}成功！${enemy.type} 被擊退並暈眩 1.25 秒。`);
 }
 
 function attackFacesEnemy(enemy) {
@@ -716,7 +961,7 @@ function updateEnemy(enemy, dt) {
   if (!enemy.active || enemy.hp <= 0) return;
   const attackType = enemy.attackType || "melee";
   const attackDamage = enemy.damage || 1;
-  const enraged = state.bossPhase && bosses.includes(enemy) && enemy.hp <= enemy.maxHp / 2;
+  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss) && enemy.hp <= enemy.maxHp / 2;
   const cooldown = enraged ? enemy.cooldown * 0.65 : enemy.cooldown;
   enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
   enemy.stunned = Math.max(0, enemy.stunned - dt);
@@ -725,7 +970,7 @@ function updateEnemy(enemy, dt) {
   const dy = state.dimension === "2D" ? player.y - enemy.y : 0;
   const distance = Math.hypot(dx, dy);
   const movement = Math.sign(dx);
-  if (distance > (attackType === "ranged" || attackType === "shockwave" ? 185 : 64)) {
+  if (enemy.attackWindup <= 0 && distance > (["ranged", "shockwave", "void"].includes(attackType) ? 185 : 64)) {
     enemy.x += movement * enemy.speed * 60 * dt;
     if (state.dimension === "2D") {
       const verticalSpeed = enemy.type === "跳躍者" ? enemy.speed * 2.2 : enemy.speed;
@@ -737,7 +982,7 @@ function updateEnemy(enemy, dt) {
     enemy.attackWindup -= dt;
     if (enemy.attackWindup <= 0) {
       if (attackType === "ranged") {
-        projectiles.push({ x: enemy.x, y: enemy.y, vx: Math.sign(player.x - enemy.x) * 4.5, vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 2 : 0, damage: attackDamage, color: enemy.color });
+        projectiles.push({ x: enemy.x, y: enemy.y, vx: Math.sign(player.x - enemy.x) * 4.5, vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 2 : 0, damage: attackDamage, color: enemy.color, source: enemy });
         setMessage(`${enemy.type} 發射了遠程攻擊！`);
       } else if (attackType === "shockwave") {
         (state.dimension === "2D" ? [-1, 0, 1] : [0]).forEach((verticalDirection) => {
@@ -748,24 +993,55 @@ function updateEnemy(enemy, dt) {
             vy: state.dimension === "2D" ? verticalDirection * 0.8 : 0,
             damage: attackDamage,
             color: "#d7a7ff",
+            source: enemy,
           });
         });
         screenShake = 0.28;
         playSound(55, 0.2, "square");
         setMessage(`${enemy.type} 釋放了裂地震波！`);
+      } else if (attackType === "void") {
+        const aimX = Math.sign(player.x - enemy.x) || 1;
+        [-1, 0, 1].forEach((spread) => {
+          projectiles.push({
+            x: enemy.x, y: enemy.y,
+            vx: aimX * 4.8,
+            vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 1.4 + spread * 1.35 : spread * 0.9,
+            damage: attackDamage,
+            color: "#a77cff",
+            source: enemy,
+          });
+        });
+        enemy.x = player.x < W / 2 ? W - 150 : 150;
+        if (state.dimension === "2D") enemy.y = Math.max(120, Math.min(H - 120, player.y + (Math.random() < 0.5 ? -110 : 110)));
+        emitParticles(enemy.x, enemy.y, "#a77cff", 22, 3.1);
+        screenShake = 0.24;
+        playSound(95, 0.25, "sawtooth");
+        setMessage("虛空君王撕裂空間，釋放三重虛空彈！");
       } else {
         if (attackType === "dash") {
-          enemy.x += Math.sign(player.x - enemy.x) * 90;
+          enemy.x = enemy.attackTargetX ?? player.x;
+          if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
         } else if (attackType === "dimension") {
-          enemy.x = player.x + (player.x < W / 2 ? 170 : -170);
-          if (state.dimension === "2D") enemy.y = player.y;
+          const targetX = enemy.attackTargetX ?? player.x;
+          enemy.x = targetX + (targetX < W / 2 ? 64 : -64);
+          if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
           enemy.x = Math.max(55, Math.min(W - 55, enemy.x));
           playSound(260, 0.18, "triangle");
         } else if (attackType === "leap") {
-          enemy.x += Math.sign(player.x - enemy.x) * 120;
-          if (state.dimension === "2D") enemy.y = player.y;
+          enemy.x = enemy.attackTargetX ?? player.x;
+          if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
         }
-        if (!(state.hasShield && keys.has("e") && shieldFacesEnemy(enemy))) {
+        const impactRadius = {
+          melee: 72,
+          dash: 70,
+          leap: 76,
+          smash: 105,
+          dimension: 82,
+        }[attackType] || 72;
+        const attackMissed = distanceToEnemy(enemy) > impactRadius;
+        if (attackMissed) {
+          setMessage(`${enemy.type} 的${attackType === "smash" ? "重擊" : "攻擊"}落空了！`);
+        } else if (!(isShieldActive() && shieldFacesEnemy(enemy))) {
           player.hp = Math.max(0, player.hp - (player.armor ? attackDamage * 0.5 : attackDamage));
           emitParticles(player.x, player.y, "#ff6b6b", 12, 2.8);
           emitFloatingText(`-${attackDamage}`, player.x, player.y - 28, "#ff6b6b");
@@ -781,7 +1057,7 @@ function updateEnemy(enemy, dt) {
             setMessage(`${enemy.type} 擊中你！`);
           }
         } else {
-          setMessage(`${enemy.type} 的攻擊被盾牌擋住了！`);
+          repelEnemy(enemy);
         }
       }
       if (attackType !== "ranged" && attackType !== "shockwave") {
@@ -796,8 +1072,11 @@ function updateEnemy(enemy, dt) {
       : attackType === "leap" ? 0.65
       : attackType === "ranged" ? 0.75
       : attackType === "shockwave" ? 1.05
+      : attackType === "void" ? 0.72
       : attackType === "dimension" ? 0.5
       : 0.55;
+    enemy.attackTargetX = player.x;
+    enemy.attackTargetY = player.y;
     if (enraged) enemy.attackWindup *= 0.8;
   }
   enemy.x = Math.max(55, Math.min(W - 55, enemy.x));
@@ -810,7 +1089,8 @@ function updateProjectiles(dt) {
     projectile.x += projectile.vx * 60 * dt;
     projectile.y += projectile.vy * 60 * dt;
     if (Math.hypot(player.x - projectile.x, player.y - projectile.y) < 24) {
-      if (!(state.hasShield && keys.has("e") && player.facing === (projectile.vx < 0 ? -1 : 1))) {
+      const incomingDirection = projectile.vx < 0 ? 1 : -1;
+      if (!(isShieldActive() && player.facing === incomingDirection)) {
         player.hp = Math.max(0, player.hp - (player.armor ? projectile.damage * 0.5 : projectile.damage));
         emitParticles(player.x, player.y, "#ff6b6b", 12, 2.8);
         emitFloatingText(`-${projectile.damage}`, player.x, player.y - 28, "#ff6b6b");
@@ -820,7 +1100,7 @@ function updateProjectiles(dt) {
           keys.clear();
         }
       } else {
-        setMessage("盾牌擋住了遠程攻擊！");
+        repelEnemy(projectile.source, "遠程反震");
       }
       projectiles.splice(index, 1);
     } else if (projectile.x < 0 || projectile.x > W || projectile.y < 74 || projectile.y > H) {
@@ -861,6 +1141,20 @@ function activateNextBoss() {
   }
 }
 
+function activateNextFrostEnemy() {
+  const current = frostEnemies[state.frostDefeated];
+  if (!current || current.hp > 0 || !current.active) return;
+  current.active = false;
+  state.frostDefeated += 1;
+  const next = frostEnemies[state.frostDefeated];
+  if (next) {
+    next.active = true;
+    setMessage(`${current.type} 被擊敗！${next.type} 從冰霧中現身。`);
+  } else {
+    setMessage("裂谷敵人已全部擊敗！進入 2D 維度收集三枚寒霜印記。 ");
+  }
+}
+
 function update(dt) {
   if (state.gameOver || state.worldReturned) return;
   const horizontal = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
@@ -875,11 +1169,14 @@ function update(dt) {
   collectShards();
   collectRuinRunes();
   collectSanctumShards();
+  collectFrostSeals();
 
   state.attackTimer = Math.max(0, state.attackTimer - dt);
+  state.swordCooldown = Math.max(0, state.swordCooldown - dt);
   state.comboTimer = Math.max(0, state.comboTimer - dt);
   if (state.comboTimer === 0) state.comboCount = 0;
   state.shieldTimer = Math.max(0, state.shieldTimer - dt);
+  state.shieldCooldown = Math.max(0, state.shieldCooldown - dt);
   screenShake = Math.max(0, screenShake - dt);
   if (state.bossRestTimer > 0) {
     state.bossRestTimer = Math.max(0, state.bossRestTimer - dt);
@@ -890,16 +1187,26 @@ function update(dt) {
       setMessage(`${nextBoss.type} 出現了！`);
     }
   }
-  const activeEnemy = state.sanctumMap ? sanctumEnemy
+  const activeEnemy = state.voidMap ? voidBoss
+    : state.frostMap ? frostEnemies[state.frostDefeated]
+    : state.sanctumMap ? sanctumEnemy
     : state.nextMap ? ruinEnemy
     : state.bossPhase && state.bossRestTimer <= 0
     ? bosses[state.defeatedBosses]
     : !state.bossPhase ? enemies[state.defeatedEnemies] : null;
   if (activeEnemy) {
     updateEnemy(activeEnemy, dt);
-    if (state.sanctumMap && sanctumEnemy.hp <= 0) {
+    if (state.voidMap && voidBoss.hp <= 0 && voidBoss.active) {
+      voidBoss.active = false;
+      state.voidBossDefeated = true;
+      voidExit.unlocked = true;
+      player.money += 200;
+      setMessage("虛空君王被擊敗！獲得 200 金，最終出口已開啟。");
+    } else if (state.frostMap) {
+      activateNextFrostEnemy();
+    } else if (state.sanctumMap && sanctumEnemy.hp <= 0 && sanctumEnemy.active) {
       sanctumEnemy.active = false;
-      setMessage("聖堂守護者已被擊敗！現在可以收集核心碎片。");
+      setMessage("聖堂守護者已被擊敗！進入 2D 維度，將三枚連動印記全部點亮。");
     } else if (state.nextMap && ruinEnemy.hp <= 0) {
       ruinEnemy.active = false;
         if (!ruinCore.collected && Math.hypot(player.x - ruinCore.x, player.y - ruinCore.y) < 42) {
@@ -939,21 +1246,160 @@ function drawText(text, x, y, size = 16, color = "#f4f0df", align = "left") {
   ctx.font = `${size}px "Microsoft JhengHei", sans-serif`;
   ctx.fillStyle = color;
   ctx.textAlign = align;
+  ctx.textBaseline = "alphabetic";
   ctx.fillText(text, x, y);
+}
+
+function drawGlow(x, y, radius, color, alpha = 0.7) {
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  glow.addColorStop(0, `${color}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`);
+  glow.addColorStop(1, `${color}00`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+}
+
+function drawAmbientBackdrop() {
+  const palette = state.voidMap
+    ? { top: "#080510", middle: "#1d1035", bottom: "#3c1d61", mote: "#b58cff", ridge: "#2a1647", ground: "#10091b" }
+    : state.frostMap
+      ? { top: "#071622", middle: "#12364c", bottom: "#2d6477", mote: "#b9f3ff", ridge: "#174458", ground: "#0b202c" }
+      : state.sanctumMap
+        ? { top: "#18140d", middle: "#332918", bottom: "#5a4422", mote: "#f1d78a", ridge: "#44351d", ground: "#211c12" }
+    : state.nextMap
+      ? { top: "#15111f", middle: "#30253c", bottom: "#493752", mote: "#c9a5df", ridge: "#3a2d47", ground: "#211a28" }
+      : state.dimension === "2D"
+        ? { top: "#07191f", middle: "#10313a", bottom: "#20505a", mote: "#79d3c9", ridge: "#173d45", ground: "#0b2026" }
+        : { top: "#090b18", middle: "#171b31", bottom: "#2b3150", mote: "#9da5d4", ridge: "#222844", ground: "#111522" };
+  const sky = ctx.createLinearGradient(0, 74, 0, H);
+  sky.addColorStop(0, palette.top);
+  sky.addColorStop(0.62, palette.middle);
+  sky.addColorStop(1, palette.bottom);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  const time = performance.now() / 1000;
+  ambientMotes.forEach((mote) => {
+    ctx.globalAlpha = 0.2 + (Math.sin(time * 1.4 + mote.phase) + 1) * 0.18;
+    ctx.fillStyle = palette.mote;
+    ctx.fillRect(mote.x, mote.y, mote.size, mote.size);
+  });
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = palette.ridge;
+  ctx.beginPath();
+  ctx.moveTo(0, 330);
+  for (let x = 0; x <= W; x += 80) {
+    const peak = 285 + ((x / 80) % 3) * 18;
+    ctx.lineTo(x + 40, peak);
+    ctx.lineTo(x + 80, 335);
+  }
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fill();
+
+  const ground = ctx.createLinearGradient(0, 350, 0, H);
+  ground.addColorStop(0, palette.ground);
+  ground.addColorStop(1, "#070912");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, 350, W, H - 350);
+  ctx.fillStyle = `${palette.mote}22`;
+  for (let x = 20; x < W; x += 58) {
+    ctx.fillRect(x, 397 + ((x / 58) % 3) * 25, 24, 2);
+  }
+
+  if (state.voidMap) {
+    ctx.fillStyle = "#24103fcc";
+    [145, 480, 815].forEach((x, index) => {
+      ctx.beginPath();
+      ctx.moveTo(x, 350);
+      ctx.lineTo(x + 35, 195 - index * 18);
+      ctx.lineTo(x + 70, 350);
+      ctx.fill();
+    });
+  } else if (state.frostMap) {
+    ctx.fillStyle = "#1a5368cc";
+    [80, 290, 540, 790].forEach((x, index) => {
+      ctx.beginPath();
+      ctx.moveTo(x, 350);
+      ctx.lineTo(x + 28, 235 - (index % 2) * 45);
+      ctx.lineTo(x + 56, 350);
+      ctx.fill();
+    });
+  } else if (state.nextMap) {
+    ctx.fillStyle = "#211a2bcc";
+    [95, 335, 575, 815].forEach((x, index) => {
+      const height = 92 + (index % 2) * 34;
+      ctx.fillRect(x, 350 - height, 44, height);
+      ctx.fillRect(x - 9, 350 - height, 62, 10);
+    });
+  } else if (state.sanctumMap) {
+    ctx.fillStyle = "#3b2f1a";
+    [110, 430, 750].forEach((x) => {
+      ctx.fillRect(x, 190, 34, 160);
+      ctx.fillRect(x - 12, 182, 58, 12);
+      ctx.fillRect(x - 8, 338, 50, 12);
+    });
+  } else {
+    ctx.fillStyle = "#12172a99";
+    for (let x = 30; x < W; x += 120) {
+      ctx.fillRect(x, 305, 54, 45);
+      ctx.fillRect(x + 14, 278, 26, 27);
+    }
+  }
+}
+
+function drawPortal(x, y, unlocked, color) {
+  if (unlocked) drawGlow(x, y, 72, color, 0.42);
+  ctx.save();
+  ctx.shadowColor = unlocked ? color : "transparent";
+  ctx.shadowBlur = unlocked ? 18 : 0;
+  ctx.fillStyle = unlocked ? color : "#5d5268";
+  ctx.fillRect(x - 28, y - 46, 56, 92);
+  ctx.fillStyle = unlocked ? "#142d2c" : "#282532";
+  ctx.fillRect(x - 19, y - 36, 38, 72);
+  ctx.strokeStyle = unlocked ? "#d8fff0" : "#81778c";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 28, y - 46, 56, 92);
+  ctx.restore();
 }
 
 function drawBackground() {
   const twoD = state.dimension === "2D";
-  ctx.fillStyle = state.sanctumMap ? "#30291b" : state.nextMap ? "#2b2634" : twoD ? "#122c35" : "#171a2a";
-  ctx.fillRect(0, 0, W, H);
+  drawAmbientBackdrop();
+  if (state.voidMap) {
+    drawText("第五張地圖：虛空王座", 24, 105, 14, "#c6a7ff");
+    drawText(state.voidBossDefeated ? "虛空君王已被擊敗" : "終局 Boss：虛空君王", 24, 130, 13, "#a987e8");
+    ctx.fillStyle = "#6c45a8";
+    ctx.fillRect(0, 382, W, 6);
+    drawPortal(voidExit.x, voidExit.y, voidExit.unlocked, "#b58cff");
+    drawText(voidExit.unlocked ? "最終出口" : "虛空封印", voidExit.x, voidExit.y + 58, 12, voidExit.unlocked ? "#d9c8ff" : "#8b78a8", "center");
+    return;
+  }
+  if (state.frostMap) {
+    drawText("第四張地圖：冰封裂谷", 24, 105, 14, "#b9f3ff");
+    drawText(state.frostDefeated < frostEnemies.length ? "擊敗裂谷敵人" : "進入 2D 收集寒霜印記", 24, 130, 13, "#91cadb");
+    drawText(`寒霜印記：${state.frostSealCount} / ${frostSeals.length}`, 760, 130, 13, "#b9f3ff");
+    if (twoD) {
+      ctx.strokeStyle = "#2f7189";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 74); ctx.lineTo(x, H); ctx.stroke(); }
+      for (let y = 74; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    } else {
+      ctx.fillStyle = "#72b9d0";
+      ctx.fillRect(0, 382, W, 6);
+    }
+    drawPortal(frostExit.x, frostExit.y, frostExit.unlocked, "#9ee7ff");
+    drawText(frostExit.unlocked ? "虛空之門" : "冰封", frostExit.x, frostExit.y + 58, 12, frostExit.unlocked ? "#c8f7ff" : "#8aa5b2", "center");
+    return;
+  }
   if (state.sanctumMap) {
     drawText("第三張地圖：核心聖堂", 24, 105, 14, "#f1d78a");
-    drawText("擊敗聖堂守護者並收集核心碎片", 24, 130, 13, "#d9c58d");
-    drawText(`核心碎片：${state.sanctumShardCount} / ${sanctumShards.length}`, 760, 130, 13, "#f1d78a");
-    ctx.fillStyle = "#63502a";
-    ctx.fillRect(0, 384, W, 5);
-    ctx.fillStyle = sanctumExit.unlocked ? "#8ce0b0" : "#5d5268";
-    ctx.fillRect(sanctumExit.x - 24, sanctumExit.y - 42, 48, 84);
+    drawText(sanctumEnemy.hp > 0 ? "擊敗聖堂守護者" : "踩上印記會切換自己與相鄰印記", 24, 130, 13, "#d9c58d");
+    drawText(`點亮印記：${state.sanctumShardCount} / ${sanctumShards.length}`, 760, 130, 13, "#f1d78a");
+    ctx.fillStyle = "#9c7a3a";
+    ctx.fillRect(0, 382, W, 6);
+    drawPortal(sanctumExit.x, sanctumExit.y, sanctumExit.unlocked, "#8ce0b0");
     drawText(sanctumExit.unlocked ? "出口" : "鎖定", sanctumExit.x, sanctumExit.y + 58, 12, sanctumExit.unlocked ? "#8ce0b0" : "#a8acc2", "center");
     return;
   }
@@ -961,6 +1407,9 @@ function drawBackground() {
     drawText("第二張地圖：寂靜遺跡", 24, 105, 14, "#d8a9d1");
     drawText(state.ruinObjectiveComplete ? "遺跡核心已取得，區域探索完成" : "擊敗遺跡守衛並取得遺跡核心", 24, 130, 13, "#bba8c3");
     drawText(`遺跡符文：${state.ruinRuneCount} / ${ruinRunes.length}`, 760, 130, 13, "#d8a9d1");
+    if (state.ruinObjectiveComplete && !ruinExit.unlocked) {
+      drawText("牆上刻痕：月 → 星 → 日", 610, 155, 13, "#f1d5ff");
+    }
     if (!state.ruinObjectiveComplete) {
       ctx.fillStyle = "#75603d";
       ctx.fillRect(ruinCore.x - 18, ruinCore.y - 18, 36, 36);
@@ -973,11 +1422,10 @@ function drawBackground() {
       for (let y = 74; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
       drawText("2D 維度：遺跡可以上下左右探索", 24, 155, 14, "#d8a9d1");
     } else {
-      ctx.fillStyle = "#4d4058";
-      ctx.fillRect(0, 384, W, 5);
+      ctx.fillStyle = "#6c527a";
+      ctx.fillRect(0, 382, W, 6);
     }
-    ctx.fillStyle = ruinExit.unlocked ? "#8ce0b0" : "#5d5268";
-    ctx.fillRect(ruinExit.x - 24, ruinExit.y - 42, 48, 84);
+    drawPortal(ruinExit.x, ruinExit.y, ruinExit.unlocked, "#8ce0b0");
     drawText(ruinExit.unlocked ? "出口" : "鎖定", ruinExit.x, ruinExit.y + 58, 12, ruinExit.unlocked ? "#8ce0b0" : "#a8acc2", "center");
     return;
   }
@@ -988,25 +1436,37 @@ function drawBackground() {
     for (let y = 74; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
     drawText("2D 維度：可以自由探索上下左右", 24, 105, 14, "#79d3c9");
     drawText(`維度碎片：${state.shardCount} / ${shards.length}`, 760, 105, 14, "#79d3c9");
-    ctx.fillStyle = dimensionGate.unlocked ? "#8ce0b0" : "#53627a";
-    ctx.fillRect(dimensionGate.x - 30, dimensionGate.y - 42, 60, 84);
-    ctx.fillStyle = "#122c35";
-    ctx.fillRect(dimensionGate.x - 20, dimensionGate.y - 32, 40, 64);
+    drawPortal(dimensionGate.x, dimensionGate.y, dimensionGate.unlocked, "#79d3c9");
     drawText(dimensionGate.unlocked ? "已解鎖" : "鎖定", dimensionGate.x, dimensionGate.y + 58, 12, dimensionGate.unlocked ? "#8ce0b0" : "#a8acc2", "center");
   } else {
-    ctx.fillStyle = "#292e49";
-    ctx.fillRect(0, 384, W, 5);
+    ctx.fillStyle = "#535d91";
+    ctx.fillRect(0, 382, W, 6);
     drawText("1D 維度：你只能沿著這條路前進", 24, 105, 14, "#9da5d4");
   }
 }
 
 function drawCharacter() {
-  const blocking = keys.has("e") && state.hasShield;
+  const blocking = isShieldActive();
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "#05060d";
+  ctx.beginPath();
+  ctx.ellipse(player.x, player.y + 18, 24, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.scale(player.facing, 1);
+  ctx.fillStyle = "#15182a";
+  ctx.fillRect(-14, 13, 10, 8);
+  ctx.fillRect(5, 13, 10, 8);
+  ctx.fillRect(-18, -18, 36, 34);
   ctx.fillStyle = state.bodyColor;
-  ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+  ctx.fillRect(-14, -15, 28, 27);
+  ctx.fillStyle = "#ffffff2e";
+  ctx.fillRect(-11, -12, 22, 4);
+  ctx.fillStyle = "#5e3d32";
+  ctx.fillRect(-14, 7, 28, 5);
   ctx.fillStyle = "#272b42";
   ctx.fillRect(-10, -7, 7, 7);
   ctx.fillRect(3, -7, 7, 7);
@@ -1014,22 +1474,39 @@ function drawCharacter() {
   ctx.fillRect(-8, -6, 3, 3);
   ctx.fillRect(5, -6, 3, 3);
   if (state.hasSword && state.attackTimer > 0) {
-    ctx.strokeStyle = "#dce7ef"; ctx.lineWidth = 6;
+    ctx.shadowColor = "#dce7ef"; ctx.shadowBlur = 10;
+    ctx.strokeStyle = "#eef7ff"; ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(15, -10); ctx.lineTo(48, -28); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#8b603f"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(13, -7); ctx.lineTo(22, -16); ctx.stroke();
   }
-  const shieldActive = state.hasShield && (keys.has("e") || state.shieldTimer > 0);
+  const shieldActive = isShieldActive();
   if (shieldActive) {
+    ctx.shadowColor = blocking ? "#85d7d0" : "#7092b7";
+    ctx.shadowBlur = blocking ? 14 : 5;
     ctx.fillStyle = blocking ? "#85d7d0" : "#7092b7";
     ctx.beginPath(); ctx.arc(22, 2, 17, -1.2, 1.2); ctx.lineTo(22, 2); ctx.fill();
+    ctx.strokeStyle = "#d8fff8";
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
   ctx.restore();
 }
 
 function drawElder() {
+  ctx.fillStyle = "#07091266";
+  ctx.beginPath(); ctx.ellipse(elder.x, elder.y + 20, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#6f4d43";
+  ctx.fillRect(elder.x - 21, elder.y - 29, 42, 54);
   ctx.fillStyle = "#bd8e70";
   ctx.fillRect(elder.x - 18, elder.y - 26, 36, 48);
+  ctx.fillStyle = "#d5a481";
+  ctx.fillRect(elder.x - 14, elder.y - 22, 28, 5);
   ctx.fillStyle = "#eee4d2";
   ctx.beginPath(); ctx.arc(elder.x, elder.y - 32, 20, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#d9d0c2";
+  ctx.beginPath(); ctx.moveTo(elder.x - 13, elder.y - 27); ctx.lineTo(elder.x, elder.y - 12); ctx.lineTo(elder.x + 13, elder.y - 27); ctx.fill();
   ctx.fillStyle = "#41455c";
   ctx.fillRect(elder.x - 16, elder.y - 37, 6, 6);
   ctx.fillRect(elder.x + 10, elder.y - 37, 6, 6);
@@ -1039,7 +1516,7 @@ function drawElder() {
 function drawEnemy() {
   getCombatants().forEach((enemy) => {
     if (!enemy.active || enemy.hp <= 0) return;
-  const enraged = state.bossPhase && bosses.includes(enemy) && enemy.hp <= enemy.maxHp / 2;
+  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss) && enemy.hp <= enemy.maxHp / 2;
   if (enemy.attackWindup > 0) {
     ctx.save();
     const warningColor = {
@@ -1047,6 +1524,7 @@ function drawEnemy() {
       smash: "#ff8c5a",
       dash: "#78c7ff",
       dimension: "#f1d76f",
+      void: "#b58cff",
       ranged: "#e7d35f",
       leap: "#8ce0b0",
     }[enemy.attackType] || "#ff9b9f";
@@ -1070,10 +1548,10 @@ function drawEnemy() {
       ctx.beginPath();
       ctx.arc(enemy.x, enemy.y, 105, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (enemy.attackType === "dash" || enemy.attackType === "dimension") {
+    } else if (enemy.attackType === "dash" || enemy.attackType === "dimension" || enemy.attackType === "void") {
       ctx.beginPath();
       ctx.moveTo(enemy.x, enemy.y);
-      ctx.lineTo(player.x, state.dimension === "2D" ? player.y : enemy.y);
+      ctx.lineTo(enemy.attackTargetX ?? player.x, state.dimension === "2D" ? enemy.attackTargetY ?? player.y : enemy.y);
       ctx.stroke();
     } else if (enemy.attackType === "ranged") {
       ctx.beginPath();
@@ -1082,18 +1560,55 @@ function drawEnemy() {
       ctx.stroke();
     } else if (enemy.attackType === "leap") {
       ctx.beginPath();
-      ctx.arc(player.x, state.dimension === "2D" ? player.y : enemy.y, 34, 0, Math.PI * 2);
+      ctx.arc(enemy.attackTargetX ?? player.x, state.dimension === "2D" ? enemy.attackTargetY ?? player.y : enemy.y, 34, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
   }
   ctx.save();
   ctx.translate(enemy.x, enemy.y);
-  ctx.fillStyle = enemy.hitFlash > 0 ? "#f4f0df" : enemy.attackWindup > 0 ? "#ef6c72" : enraged ? "#ff4f5f" : enemy.color;
+  ctx.globalAlpha = 0.38;
+  ctx.fillStyle = "#05060d";
+  ctx.beginPath(); ctx.ellipse(0, enemy.size / 2 + 7, enemy.size * 0.65, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  const enemyColor = enemy.hitFlash > 0 ? "#f4f0df" : enemy.attackWindup > 0 ? "#ef6c72" : enraged ? "#ff4f5f" : enemy.color;
+  ctx.shadowColor = enemy.attackWindup > 0 || enraged ? enemyColor : "transparent";
+  ctx.shadowBlur = enemy.attackWindup > 0 || enraged ? 16 : 0;
+  ctx.fillStyle = "#171424";
+  ctx.fillRect(-enemy.size / 2 - 3, -enemy.size / 2 - 3, enemy.size + 6, enemy.size + 6);
+  ctx.fillStyle = enemyColor;
   ctx.fillRect(-enemy.size / 2, -enemy.size / 2, enemy.size, enemy.size);
+  ctx.fillStyle = "#ffffff24";
+  ctx.fillRect(-enemy.size / 2 + 4, -enemy.size / 2 + 4, enemy.size - 8, 5);
   ctx.fillStyle = "#f4f0df";
   ctx.fillRect(-9, -6, 5, 5);
   ctx.fillRect(5, -6, 5, 5);
+  ctx.fillStyle = "#2b1720";
+  ctx.fillRect(-7, 6, 14, 4);
+  if (frostEnemies.includes(enemy)) {
+    ctx.fillStyle = "#d9f8ff";
+    ctx.beginPath();
+    ctx.moveTo(-enemy.size / 2 + 3, -enemy.size / 2);
+    ctx.lineTo(-enemy.size / 2 + 10, -enemy.size / 2 - 12);
+    ctx.lineTo(-enemy.size / 2 + 15, -enemy.size / 2);
+    ctx.moveTo(enemy.size / 2 - 15, -enemy.size / 2);
+    ctx.lineTo(enemy.size / 2 - 9, -enemy.size / 2 - 12);
+    ctx.lineTo(enemy.size / 2 - 3, -enemy.size / 2);
+    ctx.fill();
+  }
+  if (enemy === voidBoss) {
+    ctx.fillStyle = "#d9c8ff";
+    ctx.beginPath();
+    ctx.moveTo(-24, -enemy.size / 2);
+    ctx.lineTo(-16, -enemy.size / 2 - 22);
+    ctx.lineTo(-5, -enemy.size / 2 - 7);
+    ctx.lineTo(0, -enemy.size / 2 - 28);
+    ctx.lineTo(8, -enemy.size / 2 - 7);
+    ctx.lineTo(20, -enemy.size / 2 - 22);
+    ctx.lineTo(25, -enemy.size / 2);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
   const attackLabel = {
     dash: "突進！",
@@ -1102,6 +1617,7 @@ function drawEnemy() {
     ranged: "遠程射擊！",
     shockwave: "裂地震波！",
     dimension: "維度突襲！",
+    void: "虛空裂變！",
   }[enemy.attackType];
   const warningText = `${attackLabel || "攻擊！"} ${enemy.attackWindup.toFixed(1)}秒`;
   drawText(enemy.attackWindup > 0 ? warningText : `${enemy.type} HP ${enemy.hp}`, enemy.x, enemy.y - enemy.size / 2 - 8, 12, enemy.attackWindup > 0 ? "#ffdd9b" : "#d99aac", "center");
@@ -1111,6 +1627,7 @@ function drawEnemy() {
       : enemy.attackType === "leap" ? 0.65
       : enemy.attackType === "ranged" ? 0.75
       : enemy.attackType === "dimension" ? 0.5
+      : enemy.attackType === "void" ? 0.72
       : enemy.attackType === "dash" ? 0.28
       : 0.55;
     const progress = Math.max(0, Math.min(1, enemy.attackWindup / maxWindup));
@@ -1124,19 +1641,30 @@ function drawEnemy() {
 
 function drawProjectiles() {
   projectiles.forEach((projectile) => {
+    drawGlow(projectile.x, projectile.y, 24, projectile.color, 0.55);
+    ctx.shadowColor = projectile.color;
+    ctx.shadowBlur = 12;
     ctx.fillStyle = projectile.color;
     ctx.beginPath();
     ctx.arc(projectile.x, projectile.y, 7, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(projectile.x - 2, projectile.y - 2, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
   });
 }
 
 function drawParticles() {
   particles.forEach((particle) => {
     ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = 5;
     ctx.fillStyle = particle.color;
     ctx.fillRect(particle.x - particle.size / 2, particle.y - particle.size / 2, particle.size, particle.size);
   });
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 }
 
@@ -1150,41 +1678,79 @@ function drawFloatingTexts() {
 
 function drawRuinCore() {
   if (!state.nextMap || !state.ruinObjectiveComplete) return;
+  drawGlow(ruinCore.x, ruinCore.y, 46, "#e7b86b", 0.5);
+  ctx.shadowColor = "#e7b86b";
+  ctx.shadowBlur = 16;
   ctx.fillStyle = "#e7b86b";
   ctx.beginPath();
   ctx.arc(ruinCore.x, ruinCore.y, 14, 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
 }
 
 function drawRuinRunes() {
-  if (!state.nextMap) return;
+  if (!state.nextMap || !state.ruinObjectiveComplete) return;
   ruinRunes.forEach((rune) => {
-    if (rune.collected) return;
-    ctx.fillStyle = "#c9a5df";
-    ctx.fillRect(rune.x - 8, rune.y - 8, 16, 16);
-    drawText("✦", rune.x, rune.y + 5, 13, "#fff1ff", "center");
+    if (rune.collected) drawGlow(rune.x, rune.y, 44, "#c9a5df", 0.5);
+    ctx.shadowColor = rune.collected ? "#c9a5df" : "transparent";
+    ctx.shadowBlur = rune.collected ? 14 : 0;
+    ctx.fillStyle = rune.collected ? "#f1d5ff" : "#634b75";
+    ctx.fillRect(rune.x - 18, rune.y - 18, 36, 36);
+    ctx.strokeStyle = "#c9a5df";
+    ctx.strokeRect(rune.x - 18, rune.y - 18, 36, 36);
+    drawText(rune.glyph, rune.x, rune.y + 6, 17, rune.collected ? "#382444" : "#fff1ff", "center");
+    ctx.shadowBlur = 0;
   });
 }
 
 function drawSanctumShards() {
-  if (!state.sanctumMap) return;
-  sanctumShards.forEach((shard) => {
-    if (shard.collected) return;
-    ctx.fillStyle = "#f1d78a";
-    ctx.fillRect(shard.x - 8, shard.y - 8, 16, 16);
-    drawText("✦", shard.x, shard.y + 5, 13, "#fff9d6", "center");
+  if (!state.sanctumMap || sanctumEnemy.hp > 0) return;
+  sanctumShards.forEach((sigil, index) => {
+    if (sigil.active) drawGlow(sigil.x, sigil.y, 52, "#f1d78a", 0.48);
+    ctx.fillStyle = sigil.active ? "#f1d78a" : "#4d452f";
+    ctx.beginPath();
+    ctx.arc(sigil.x, sigil.y, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = sigil.active ? "#fff9d6" : "#8f8051";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    drawText(String(index + 1), sigil.x, sigil.y + 6, 16, sigil.active ? "#3b3218" : "#d9c58d", "center");
+  });
+}
+
+function drawFrostSeals() {
+  if (!state.frostMap || state.frostDefeated < frostEnemies.length || state.dimension !== "2D") return;
+  frostSeals.forEach((seal) => {
+    if (seal.collected) return;
+    drawGlow(seal.x, seal.y, 46, "#9ee7ff", 0.52);
+    ctx.save();
+    ctx.translate(seal.x, seal.y);
+    ctx.rotate(Math.PI / 4);
+    ctx.shadowColor = "#9ee7ff";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#b9f3ff";
+    ctx.fillRect(-13, -13, 26, 26);
+    ctx.fillStyle = "#4b9ab6";
+    ctx.fillRect(-6, -6, 12, 12);
+    ctx.restore();
+    drawText("❄", seal.x, seal.y + 6, 16, "#effdff", "center");
   });
 }
 
 function drawShards() {
-  if (state.dimension !== "2D" || state.nextMap) return;
+  if (state.dimension !== "2D" || state.nextMap || state.sanctumMap || state.frostMap || state.voidMap) return;
   shards.forEach((shard) => {
     if (shard.collected) return;
+    drawGlow(shard.x, shard.y, 38, "#79d3c9", 0.5);
     ctx.save();
     ctx.translate(shard.x, shard.y);
     ctx.rotate(Math.PI / 4);
+    ctx.shadowColor = "#79d3c9";
+    ctx.shadowBlur = 14;
     ctx.fillStyle = "#79d3c9";
     ctx.fillRect(-9, -9, 18, 18);
+    ctx.fillStyle = "#d1fff5";
+    ctx.fillRect(-4, -4, 8, 8);
     ctx.restore();
     drawText("◆", shard.x, shard.y + 5, 13, "#d1fff5", "center");
   });
@@ -1192,18 +1758,26 @@ function drawShards() {
 
 function getCurrentObjective() {
   if (state.worldReturned) return "冒險完成：你已回到正常世界";
+  if (state.voidMap) {
+    return state.voidBossDefeated ? "前往最終出口並按 F" : "擊敗 Boss：虛空君王";
+  }
+  if (state.frostMap) {
+    if (state.frostDefeated < frostEnemies.length) return `擊敗裂谷敵人（${state.frostDefeated} / ${frostEnemies.length}）`;
+    if (state.frostSealCount < frostSeals.length) return `收集寒霜印記（${state.frostSealCount} / ${frostSeals.length}）`;
+    return "前往冰封出口並按 F";
+  }
   if (state.sanctumMap) {
     if (sanctumEnemy.hp > 0) return "擊敗聖堂守護者";
-    if (state.sanctumShardCount < sanctumShards.length) return `收集核心碎片（${state.sanctumShardCount} / ${sanctumShards.length}）`;
+    if (state.sanctumShardCount < sanctumShards.length) return `點亮所有連動印記（${state.sanctumShardCount} / ${sanctumShards.length}）`;
     return "前往核心聖堂出口並按 F";
   }
   if (state.nextMap) {
     if (!state.ruinObjectiveComplete) return "擊敗遺跡守衛並取得遺跡核心";
-    if (state.ruinRuneCount < ruinRunes.length) return `收集遺跡符文（${state.ruinRuneCount} / ${ruinRunes.length}）`;
+    if (state.ruinRuneCount < ruinRunes.length) return `依月 → 星 → 日點亮符文（${state.ruinRuneCount} / ${ruinRunes.length}）`;
     return "前往遺跡出口並按 F";
   }
   if (!state.elderTalked) return "靠近老人並按 F 對話";
-  if (!state.hasShield) return "完成老人教學並取得盾牌";
+  if (state.dialog || state.tutorialStep < 4) return "完成老人的戰鬥教學";
   if (!state.bossPhase) return `擊敗所有敵人（${state.defeatedEnemies} / ${enemies.length}）`;
   if (state.defeatedBosses < bosses.length) return `擊敗小 Boss（${state.defeatedBosses} / ${bosses.length}）`;
   if (state.shardCount < shards.length) return `在 2D 收集維度碎片（${state.shardCount} / ${shards.length}）`;
@@ -1212,25 +1786,44 @@ function getCurrentObjective() {
 
 function drawObjective() {
   const objective = getCurrentObjective();
-  ctx.fillStyle = "#0c0e18d9";
+  const panel = ctx.createLinearGradient(18, 148, 318, 196);
+  panel.addColorStop(0, "#0c0e18f2");
+  panel.addColorStop(1, "#252139e8");
+  ctx.fillStyle = panel;
   ctx.fillRect(18, 148, 300, 48);
   ctx.strokeStyle = "#75603d";
+  ctx.lineWidth = 2;
   ctx.strokeRect(18, 148, 300, 48);
   drawText("目前目標", 30, 167, 12, "#f4d18d");
   drawText(objective, 30, 186, 13, "#f4f0df");
 }
 
 function drawHud() {
-  ctx.fillStyle = "#0c0e18cc";
+  const hud = ctx.createLinearGradient(0, 0, 0, 74);
+  hud.addColorStop(0, "#090b14fa");
+  hud.addColorStop(1, "#171a2ae8");
+  ctx.fillStyle = hud;
   ctx.fillRect(0, 0, W, 74);
+  ctx.fillStyle = state.dimension === "2D" ? "#79d3c9" : "#59618d";
+  ctx.fillRect(0, 72, W, 2);
   drawText(`維度：${state.dimension}`, 24, 30, 18, state.dimension === "2D" ? "#79d3c9" : "#c3c8ed");
-  if (state.nextMap) drawText("地圖 2", 150, 30, 13, "#d8a9d1");
+  const mapLabel = state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
+  drawText(mapLabel, 150, 30, 13, state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
   const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
+  const swordStatus = state.swordCooldown > 0 ? `${state.swordCooldown.toFixed(1)}s` : "可用";
+  const shieldStatus = !state.hasShield ? "未取得" : state.shieldCooldown > 0 ? `${state.shieldCooldown.toFixed(1)}s` : "可用";
+  drawText(`劍 ${swordStatus}・盾 ${shieldStatus}`, 150, 54, 12, "#a8acc2");
   drawText("HP", 790, 29, 13, "#a8acc2");
   for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = "#171a27";
+    ctx.fillRect(821 + i * 28, 15, 23, 23);
     ctx.fillStyle = i + 1 <= player.hp ? "#ec6c72" : i + 0.5 <= player.hp ? "#f4a06a" : "#393d52";
     ctx.fillRect(823 + i * 28, 17, 19, 19);
+    if (i + 1 <= player.hp) {
+      ctx.fillStyle = "#ffafb2";
+      ctx.fillRect(826 + i * 28, 19, 8, 3);
+    }
   }
 
   const equipment = state.hasSword && state.hasShield
@@ -1241,9 +1834,15 @@ function drawHud() {
   if (state.comboCount > 0) {
     drawText(`連擊：${state.comboCount}（傷害 x${(1 + (state.comboCount - 1) * 0.25).toFixed(2)}）`, 390, 52, 13, "#f4d18d");
   }
-  const progress = state.bossPhase
-    ? `小 Boss ${Math.min(state.defeatedBosses + 1, bosses.length)} / ${bosses.length}`
-    : `敵人 ${Math.min(state.defeatedEnemies + 1, enemies.length)} / ${enemies.length}`;
+  const progress = state.voidMap
+    ? "最終 Boss"
+    : state.frostMap
+      ? `裂谷敵人 ${Math.min(state.frostDefeated + 1, frostEnemies.length)} / ${frostEnemies.length}`
+      : state.sanctumMap ? "聖堂守護者"
+      : state.nextMap ? "遺跡守衛"
+      : state.bossPhase
+        ? `小 Boss ${Math.min(state.defeatedBosses + 1, bosses.length)} / ${bosses.length}`
+        : `敵人 ${Math.min(state.defeatedEnemies + 1, enemies.length)} / ${enemies.length}`;
   drawText(progress, 390, 30, 13, "#a8acc2");
   if (state.bossRestTimer > 0) {
     drawText(`休息 ${Math.ceil(state.bossRestTimer)} 秒`, 390, 52, 13, "#f4d18d");
@@ -1251,7 +1850,7 @@ function drawHud() {
   const target = getCombatants().find((combatant) => combatant.active && combatant.hp > 0);
   if (target) {
     drawText(target.type, W / 2, 105, 16, "#f4f0df", "center");
-    const targetEnraged = state.bossPhase && bosses.includes(target) && target.hp <= target.maxHp / 2;
+    const targetEnraged = (state.bossPhase && bosses.includes(target) || target === voidBoss) && target.hp <= target.maxHp / 2;
     if (targetEnraged) {
       drawText("狂暴狀態：攻擊速度提升！", W / 2, 180, 13, "#ff7b83", "center");
     }
@@ -1260,6 +1859,7 @@ function drawHud() {
       dash: "影襲突進",
       smash: "熔岩重擊",
       dimension: "維度突襲",
+      void: "虛空裂變",
     }[target.attackType];
     if (attackStyle) {
       drawText(`攻擊模式：${attackStyle}`, W / 2, 162, 12, "#f4d18d", "center");
@@ -1270,8 +1870,8 @@ function drawHud() {
     ctx.fillRect(330, 116, 300 * (target.hp / target.maxHp), 12);
     drawText(`${target.hp} / ${target.maxHp} HP`, W / 2, 145, 12, "#d7d9e8", "center");
   }
-  if (state.hasShield && keys.has("e")) {
-    drawText(player.facing < 0 ? "盾牌朝左" : "盾牌朝右", 24, 92, 13, "#85d7d0");
+  if (isShieldActive()) {
+    drawText(`${player.facing < 0 ? "盾牌朝左" : "盾牌朝右"}・${state.shieldTimer.toFixed(1)} 秒`, 24, 92, 13, "#85d7d0");
   }
   if (player.hp < player.maxHp) {
     drawText(`自然回復 ${Math.ceil(state.regenTimer)} 秒`, 640, 92, 12, "#a8acc2");
@@ -1285,7 +1885,7 @@ function drawTutorial() {
     "",
     "先學會這個世界的規則吧。按 F 繼續。",
     "A / D 可以左右移動，滑鼠左鍵可以使用劍。",
-    "按住 E 可以舉盾，防禦時按滑鼠左鍵可以盾反。",
+    "按 E 舉盾 0.3 秒，擋住攻擊會擊退並暈眩敵人。",
     "按 C 進入 2D 維度，使用 W / A / S / D 探索。",
   ];
   ctx.fillStyle = "#0c0e18ee";
@@ -1298,10 +1898,21 @@ function drawTutorial() {
 }
 
 function drawMerchant() {
+  ctx.fillStyle = "#07091266";
+  ctx.beginPath(); ctx.ellipse(merchant.x, merchant.y + 20, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#4f3550";
+  ctx.fillRect(merchant.x - 19, merchant.y - 28, 38, 52);
   ctx.fillStyle = "#8b5e83";
   ctx.fillRect(merchant.x - 16, merchant.y - 25, 32, 46);
+  ctx.fillStyle = "#b07da6";
+  ctx.fillRect(merchant.x - 12, merchant.y - 21, 24, 5);
   ctx.fillStyle = "#f0c18b";
   ctx.beginPath(); ctx.arc(merchant.x, merchant.y - 31, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#5d3d56";
+  ctx.beginPath(); ctx.arc(merchant.x, merchant.y - 37, 18, Math.PI, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#33263a";
+  ctx.fillRect(merchant.x - 7, merchant.y - 32, 4, 4);
+  ctx.fillRect(merchant.x + 4, merchant.y - 32, 4, 4);
   drawText("商人", merchant.x, merchant.y - 56, 14, "#f4d18d", "center");
 }
 
@@ -1320,6 +1931,7 @@ function draw() {
   drawRuinCore();
   drawRuinRunes();
   drawSanctumShards();
+  drawFrostSeals();
   drawMerchant();
   drawCharacter();
   drawHud();
@@ -1329,7 +1941,7 @@ function draw() {
     ctx.fillStyle = "#102b24dd";
     ctx.fillRect(0, 0, W, H);
     drawText("返回正常世界", W / 2, H / 2 - 16, 38, "#8ce0b0", "center");
-    drawText(state.ruinObjectiveComplete ? "遺跡核心與符文全部取得" : "四個小 Boss 已全部擊敗", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
+    drawText(state.voidBossDefeated ? "五張地圖全部完成・虛空君王已被擊敗" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
   }
   if (state.gameOver) {
     ctx.fillStyle = "#080912e8";
@@ -1341,7 +1953,7 @@ function draw() {
     ctx.strokeRect(230, 175, 500, 190);
     drawText("遊戲結束", W / 2, 235, 38, "#ff9b9f", "center");
     drawText("HP 已歸零", W / 2, 275, 18, "#f4f0df", "center");
-    drawText("按 R 或點擊下方按鈕重新開始", W / 2, 318, 16, "#f4d18d", "center");
+    drawText("按 X 或點擊下方按鈕重新開始", W / 2, 318, 16, "#f4d18d", "center");
   }
 
 }
@@ -1355,23 +1967,30 @@ function loop(now) {
 
 document.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
-  if (key === "r") {
+  if (key === "x") {
     event.preventDefault();
     resetGame();
     return;
   }
   if (state.gameOver) return;
+  if (key === "e") {
+    event.preventDefault();
+    if (!event.repeat) activateShield();
+    return;
+  }
   keys.add(key);
-  if (["a", "d", "w", "s", "e", "c", "f", "g"].includes(key)) event.preventDefault();
+  if (["a", "d", "w", "s", "e", "c", "f", "g", "r"].includes(key)) event.preventDefault();
   if (key === "c") switchDimension();
   const nearElder = distanceToElder() < 90;
   const nearGate = state.dimension === "2D" && Math.hypot(player.x - dimensionGate.x, player.y - dimensionGate.y) < 85;
   const nearRuinExit = state.nextMap && Math.hypot(player.x - ruinExit.x, player.y - ruinExit.y) < 85;
   const nearSanctumExit = state.sanctumMap && Math.hypot(player.x - sanctumExit.x, player.y - sanctumExit.y) < 85;
-  if (key === "f" && (nearElder || nearGate || nearRuinExit || nearSanctumExit)) interact();
+  const nearFrostExit = state.frostMap && Math.hypot(player.x - frostExit.x, player.y - frostExit.y) < 85;
+  const nearVoidExit = state.voidMap && Math.hypot(player.x - voidExit.x, player.y - voidExit.y) < 85;
+  if (key === "f" && (nearElder || nearGate || nearRuinExit || nearSanctumExit || nearFrostExit || nearVoidExit)) interact();
   if (key === "f" && distanceToMerchant() < 90) toggleShop();
   if (key === "g" && distanceToMerchant() < 90) toggleBetting();
-  if (key === "p" && player.potions > 0 && player.hp < player.maxHp) {
+  if (key === "r" && player.potions > 0 && player.hp < player.maxHp) {
     player.potions -= 1;
     player.hp = Math.min(player.maxHp, player.hp + 1);
     setMessage("你使用生命藥水，恢復 1 HP。");
@@ -1388,6 +2007,10 @@ document.querySelectorAll("[data-control]").forEach((button) => {
   const control = button.dataset.control;
   const press = (event) => {
     event.preventDefault();
+    if (control === "e") {
+      activateShield();
+      return;
+    }
     if (["attack", "c", "f"].includes(control)) return;
     keys.add(control);
   };
