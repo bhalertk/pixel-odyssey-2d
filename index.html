@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Odyssey 2D - 開場原型</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <section id="main-menu" class="main-menu" aria-label="主選單">
+        <p class="eyebrow">PIXEL ODYSSEY</p>
+        <h2>維度邊境</h2>
+        <p>選擇你的角色顏色，開始冒險。</p>
+        <div class="menu-colors">
+          <label>身體 <input id="menu-body-color" type="color" value="#efad62" /></label>
+          <label>眼睛 <input id="menu-eye-color" type="color" value="#f4f0df" /></label>
+        </div>
+        <div class="menu-help">
+          <strong>操作說明</strong>
+          <span>A / D 移動・W / S（2D）探索</span>
+          <span>左鍵攻擊・按住 E 防禦・防禦時左鍵盾反</span>
+          <span>C 切換 2D・F 對話／互動・G 賭錢</span>
+        </div>
+        <div class="audio-settings">
+          <label><input id="menu-sound-enabled" type="checkbox" checked /> 開啟音效</label>
+          <label>音量 <input id="menu-volume" type="range" min="0" max="1" step="0.05" value="0.6" /></label>
+        </div>
+        <button id="start-game" type="button">開始新遊戲</button>
+        <button id="menu-load-save" type="button">讀取進度</button>
+      </section>
+      <header>
+        <div>
+          <p class="eyebrow">PIXEL ODYSSEY</p>
+          <h1>維度邊境</h1>
+        </div>
+        <p class="hint">點擊畫面取得控制權</p>
+      </header>
+      <section id="game-content" hidden>
+      <section class="game-frame">
+        <canvas id="game" width="960" height="540" aria-label="遊戲畫面"></canvas>
+        <div class="controls">
+          <span><b>A / D</b> 移動</span>
+          <span><b>滑鼠左鍵</b> 攻擊／盾反</span>
+          <span><b>按住 E</b> 防禦</span>
+          <span><b>C</b> 切換維度</span>
+          <span><b>F</b> 對話／商店</span>
+          <span><b>G</b> 賭錢</span>
+        </div>
+        <div class="touch-controls" aria-label="螢幕操作">
+          <button type="button" data-control="a">◀</button>
+          <button type="button" data-control="w">▲</button>
+          <button type="button" data-control="s">▼</button>
+          <button type="button" data-control="d">▶</button>
+          <button type="button" data-control="e">盾</button>
+          <button type="button" data-control="attack">劍／盾反</button>
+          <button type="button" data-control="c">2D</button>
+          <button type="button" data-control="f">互動</button>
+        </div>
+      </section>
+      <section class="customization" aria-label="角色外觀設定">
+        <strong>角色外觀</strong>
+        <label>身體顏色 <input id="body-color" type="color" value="#efad62" /></label>
+        <label>眼睛顏色 <input id="eye-color" type="color" value="#f4f0df" /></label>
+      </section>
+      <section id="shop" class="shop" hidden aria-label="商人商店">
+        <strong>商人：用金錢換取冒險物資</strong>
+        <button data-item="armor">防具（30 金）</button>
+        <button data-item="potion">生命藥水（20 金）</button>
+        <button data-item="weapon">強化武器（50 金）</button>
+      </section>
+      <section id="betting" class="shop betting" hidden aria-label="賭錢遊戲">
+        <strong>幸運硬幣：猜正反</strong>
+        <label>下注 <input id="bet-amount" type="number" min="1" value="10" /></label>
+        <button data-guess="正面">猜正面</button>
+        <button data-guess="反面">猜反面</button>
+      </section>
+      <button id="restart" class="restart" type="button">重新開始（R）</button>
+      <div class="save-controls">
+        <button id="load-save" type="button">讀取進度</button>
+        <button id="clear-save" type="button">清除存檔</button>
+      </div>
+      <div class="audio-settings in-game-audio">
+        <label><input id="sound-enabled" type="checkbox" checked /> 音效</label>
+        <label>音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" /></label>
+      </div>
+      <p id="message" class="message">前往老人身邊，按 <b>F</b> 開始對話。</p>
+      </section>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
