@@ -15,6 +15,11 @@
         <div class="menu-colors">
           <label>身體 <input id="menu-body-color" type="color" value="#efad62" /></label>
           <label>眼睛 <input id="menu-eye-color" type="color" value="#f4f0df" /></label>
+          <label>衣服 <input id="menu-shirt-color" type="color" value="#efad62" /></label>
+          <label>褲子 <input id="menu-pants-color" type="color" value="#29324d" /></label>
+          <label><input id="menu-hat-enabled" type="checkbox" /> 帽子</label>
+          <label><input id="menu-beard-enabled" type="checkbox" /> 鬍子</label>
+          <label><input id="menu-glasses-enabled" type="checkbox" /> 眼鏡</label>
         </div>
         <div class="menu-help">
           <strong>操作說明</strong>
@@ -48,6 +53,9 @@
           <span><b>F</b> 對話／商店</span>
           <span><b>G</b> 賭錢</span>
           <span><b>R</b> 使用生命藥水</span>
+          <span><b>T</b> 狂戰藥水・<b>Q</b> 星塵炸彈</span>
+          <span><b>Z</b> 解謎羅盤・<b>B</b> 護盾晶核</span>
+          <span><b>P</b> 暫停／繼續</span>
           <span><b>X</b> 重新開始</span>
         </div>
         <div class="touch-controls" aria-label="螢幕操作">
@@ -65,12 +73,24 @@
         <strong>角色外觀</strong>
         <label>身體顏色 <input id="body-color" type="color" value="#efad62" /></label>
         <label>眼睛顏色 <input id="eye-color" type="color" value="#f4f0df" /></label>
+        <label>衣服 <input id="shirt-color" type="color" value="#efad62" /></label>
+        <label>褲子 <input id="pants-color" type="color" value="#29324d" /></label>
+        <label><input id="hat-enabled" type="checkbox" /> 帽子</label>
+        <label><input id="beard-enabled" type="checkbox" /> 鬍子</label>
+        <label><input id="glasses-enabled" type="checkbox" /> 眼鏡</label>
       </section>
       <section id="shop" class="shop" hidden aria-label="商人商店">
         <strong>商人：用金錢換取冒險物資</strong>
         <button data-item="armor">防具（45 金）</button>
         <button data-item="potion">生命藥水（30 金）</button>
         <button data-item="weapon">強化武器（75 金）</button>
+        <button data-item="bow">光能弓（110 金）</button>
+        <button data-item="staff">虛空法杖（140 金）</button>
+        <button data-item="power">狂戰藥水（55 金）</button>
+        <button data-item="boots">迅捷靴（65 金）</button>
+        <button data-item="bomb">星塵炸彈（40 金）</button>
+        <button data-item="compass">解謎羅盤（35 金）</button>
+        <button data-item="core">護盾晶核（50 金）</button>
       </section>
       <section id="betting" class="shop betting" hidden aria-label="賭錢遊戲">
         <strong>幸運硬幣：猜正反</strong>
