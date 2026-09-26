@@ -25,6 +25,7 @@ const clearSaveButton = document.querySelector("#clear-save");
 const mainMenu = document.querySelector("#main-menu");
 const gameContent = document.querySelector("#game-content");
 const startGameButton = document.querySelector("#start-game");
+const startFourthButton = document.querySelector("#start-fourth");
 const menuLoadSaveButton = document.querySelector("#menu-load-save");
 const menuBodyColorInput = document.querySelector("#menu-body-color");
 const menuEyeColorInput = document.querySelector("#menu-eye-color");
@@ -39,16 +40,20 @@ const soundEnabledInput = document.querySelector("#sound-enabled");
 const volumeInput = document.querySelector("#volume");
 const SAVE_KEY = "pixel-odyssey-2d-save";
 const AUDIO_SETTINGS_KEY = "pixel-odyssey-2d-audio";
+const FOURTH_UNLOCK_KEY = "pixel-odyssey-2d-fourth-unlocked";
 const SHOP_BASE_PRICES = { armor: 45, potion: 30, weapon: 75, bow: 110, staff: 140, power: 55, boots: 65, bomb: 40, compass: 35, core: 50 };
 const SHOP_ITEM_NAMES = { armor: "防具", potion: "生命藥水", weapon: "強化武器", bow: "光能弓", staff: "虛空法杖", power: "狂戰藥水", boots: "迅捷靴", bomb: "星塵炸彈", compass: "解謎羅盤", core: "護盾晶核" };
 const SECRET_SEQUENCE = "AAWWDDSS";
 const THIRD_SEQUENCE = "DDDWWWAAASSSAWDS";
+const ARENA_FIFTY_SEQUENCE = "AWDSAWDSAWDS";
 const MONEY_SEQUENCE = "AWDSSDWASSDWASSADWSS";
-const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, MONEY_SEQUENCE.length);
+const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, ARENA_FIFTY_SEQUENCE.length, MONEY_SEQUENCE.length);
 const DIMENSION_COOLDOWN = 5;
 const AUTHOR_INTRO_DURATION = 3.5;
 const ARENA_TOTAL_WAVES = 50;
 const ARENA_ENEMIES_PER_WAVE = 5;
+const ELEVATOR_TOTAL_WAVES = 5;
+const ELEVATOR_ENEMIES_PER_WAVE = 5;
 const audioSettings = { enabled: true, volume: 0.6 };
 
 const keys = new Set();
@@ -148,10 +153,47 @@ const arenaEnemyPool = [
   { type: "競技迅捷者", attackType: "dash", color: "#e57b55", size: 28, hp: 5, speed: 1.4, range: 115, cooldown: 1.1, damage: 1.5 },
   { type: "競技巨岩", attackType: "smash", color: "#9b8bb8", size: 48, hp: 9, speed: 0.62, range: 120, cooldown: 1.8, damage: 2 },
   { type: "競技寒晶術士", attackType: "ranged", color: "#8de3ef", size: 32, hp: 7, speed: 0.6, range: 260, cooldown: 1.5, damage: 1.5 },
+  { type: "火紋突擊兵", attackType: "dash", color: "#ed765a", size: 30, hp: 6, speed: 1.42, range: 118, cooldown: 1.2, damage: 1.4 },
+  { type: "鋼甲衛士", attackType: "melee", color: "#9aa9b4", size: 40, hp: 11, speed: 0.68, range: 92, cooldown: 1.5, damage: 1.7 },
+  { type: "翠影刺客", attackType: "dash", color: "#63bd91", size: 27, hp: 5, speed: 1.55, range: 126, cooldown: 1.16, damage: 1.4 },
+  { type: "雷霆術士", attackType: "ranged", color: "#e8ce68", size: 31, hp: 7, speed: 0.62, range: 255, cooldown: 1.56, damage: 1.5 },
+  { type: "深海槍兵", attackType: "melee", color: "#5db6b2", size: 35, hp: 8, speed: 0.91, range: 108, cooldown: 1.33, damage: 1.5 },
+  { type: "岩脈重錘", attackType: "smash", color: "#ae8663", size: 45, hp: 12, speed: 0.56, range: 132, cooldown: 1.82, damage: 2 },
+  { type: "冰霧獵手", attackType: "ranged", color: "#8bcce8", size: 29, hp: 6, speed: 0.7, range: 250, cooldown: 1.68, damage: 1.4 },
+  { type: "赤砂跳躍者", attackType: "leap", color: "#d88a5c", size: 33, hp: 7, speed: 1.12, range: 102, cooldown: 1.48, damage: 1.6 },
+  { type: "毒藤守衛", attackType: "melee", color: "#79a968", size: 38, hp: 10, speed: 0.76, range: 100, cooldown: 1.42, damage: 1.6 },
+  { type: "星屑射手", attackType: "ranged", color: "#c4a9ee", size: 29, hp: 7, speed: 0.65, range: 265, cooldown: 1.62, damage: 1.5 },
+  { type: "夜幕追蹤者", attackType: "dash", color: "#806fbe", size: 28, hp: 6, speed: 1.48, range: 125, cooldown: 1.12, damage: 1.5 },
+  { type: "玄鐵劍士", attackType: "melee", color: "#84939f", size: 36, hp: 9, speed: 0.9, range: 102, cooldown: 1.3, damage: 1.7 },
+  { type: "熔岩裂爪", attackType: "leap", color: "#e26e52", size: 35, hp: 8, speed: 1.14, range: 112, cooldown: 1.44, damage: 1.7 },
+  { type: "風暴祭司", attackType: "shockwave", color: "#8ba8df", size: 37, hp: 10, speed: 0.61, range: 225, cooldown: 1.82, damage: 1.3 },
+  { type: "暮光舞者", attackType: "dash", color: "#cd85b8", size: 27, hp: 6, speed: 1.58, range: 119, cooldown: 1.18, damage: 1.5 },
+  { type: "晶石衛兵", attackType: "smash", color: "#9ac4cd", size: 43, hp: 12, speed: 0.59, range: 127, cooldown: 1.78, damage: 1.9 },
+  { type: "虛空預言者", attackType: "void", color: "#a078cf", size: 39, hp: 10, speed: 0.66, range: 245, cooldown: 1.72, damage: 1.3 },
+  { type: "狂焰騎士", attackType: "dash", color: "#f17e62", size: 37, hp: 10, speed: 1.26, range: 130, cooldown: 1.24, damage: 1.7 },
+  { type: "月銀槍衛", attackType: "melee", color: "#c4c8e6", size: 35, hp: 9, speed: 0.93, range: 112, cooldown: 1.32, damage: 1.6 },
+  { type: "霜環使者", attackType: "shockwave", color: "#91dbe8", size: 36, hp: 9, speed: 0.64, range: 230, cooldown: 1.8, damage: 1.3 },
+  { type: "破城巨人", attackType: "smash", color: "#a88d83", size: 50, hp: 13, speed: 0.53, range: 138, cooldown: 1.88, damage: 2.1 },
+  { type: "流光弓手", attackType: "ranged", color: "#f1c887", size: 29, hp: 7, speed: 0.73, range: 260, cooldown: 1.55, damage: 1.5 },
+  { type: "潮汐刺客", attackType: "dash", color: "#58b9c0", size: 28, hp: 7, speed: 1.51, range: 124, cooldown: 1.2, damage: 1.5 },
+  { type: "紅蓮法師", attackType: "void", color: "#db6b8b", size: 37, hp: 9, speed: 0.68, range: 240, cooldown: 1.72, damage: 1.4 },
+  { type: "黑曜盾兵", attackType: "melee", color: "#666f8c", size: 42, hp: 12, speed: 0.7, range: 96, cooldown: 1.51, damage: 1.8 },
+  { type: "幻影獸", attackType: "leap", color: "#aa91d7", size: 33, hp: 8, speed: 1.2, range: 110, cooldown: 1.4, damage: 1.6 },
+  { type: "雷光投手", attackType: "ranged", color: "#e7da78", size: 32, hp: 8, speed: 0.69, range: 255, cooldown: 1.58, damage: 1.5 },
+  { type: "星界武僧", attackType: "melee", color: "#b994db", size: 34, hp: 10, speed: 1.04, range: 101, cooldown: 1.27, damage: 1.7 },
+  { type: "灰燼獵犬", attackType: "leap", color: "#c47966", size: 32, hp: 8, speed: 1.26, range: 108, cooldown: 1.42, damage: 1.6 },
+  { type: "深淵刃客", attackType: "dash", color: "#7475b9", size: 30, hp: 8, speed: 1.47, range: 128, cooldown: 1.2, damage: 1.7 },
 ].map((enemy) => ({ ...enemy, x: 650, y: 370, maxHp: enemy.hp, startX: 650, startY: 370, active: false, attackCooldown: enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
 const arenaBossPool = [
   { type: "競技炎魔", attackType: "smash", color: "#f05c4f", size: 64, hp: 20, speed: 0.72, range: 145, cooldown: 1.5, damage: 2.5 },
   { type: "競技虛空龍", attackType: "void", color: "#d05cff", size: 72, hp: 25, speed: 0.82, range: 270, cooldown: 1.2, damage: 2.5 },
+  { type: "競技雷帝", attackType: "shockwave", color: "#e0c96a", size: 66, hp: 28, speed: 0.62, range: 230, cooldown: 1.7, damage: 1.8 },
+  { type: "競技霜后", attackType: "ranged", color: "#a5dcf0", size: 62, hp: 30, speed: 0.56, range: 270, cooldown: 1.52, damage: 1.8 },
+  { type: "競技石王", attackType: "smash", color: "#a79582", size: 76, hp: 34, speed: 0.52, range: 150, cooldown: 1.67, damage: 2.2 },
+  { type: "競技影皇", attackType: "dash", color: "#7564b8", size: 60, hp: 32, speed: 1.12, range: 148, cooldown: 1.22, damage: 1.9 },
+  { type: "競技星巫", attackType: "void", color: "#d6a2e9", size: 68, hp: 36, speed: 0.7, range: 255, cooldown: 1.53, damage: 1.7 },
+  { type: "競技狂獸", attackType: "leap", color: "#da8063", size: 74, hp: 38, speed: 1.02, range: 134, cooldown: 1.28, damage: 2 },
+  { type: "競技時輪主宰", attackType: "dimension", color: "#d2ad62", size: 76, hp: 42, speed: 0.72, range: 178, cooldown: 1.34, damage: 2 },
 ].map((boss) => ({ ...boss, x: 650, y: 370, maxHp: boss.hp, startX: 650, startY: 370, active: false, attackCooldown: boss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
 const arenaFinalBoss = {
   type: "競技場最終 Boss：無盡霸主", attackType: "void", color: "#ffca6e",
@@ -203,10 +245,10 @@ const baseCombatStats = new Map(allCombatants.map((enemy) => [enemy, {
 function setEnemyDifficulty(playthrough) {
   allCombatants.forEach((enemy) => {
     const base = baseCombatStats.get(enemy);
-    const healthMultiplier = playthrough === 3 ? 1.45 : playthrough === 2 ? 1.3 : 1;
-    const damageMultiplier = playthrough === 3 ? 1.18 : playthrough === 2 ? 1.15 : 1;
-    const speedMultiplier = playthrough === 3 ? 1.12 : playthrough === 2 ? 1.08 : 1;
-    const cooldownMultiplier = playthrough === 3 ? 0.92 : playthrough === 2 ? 0.95 : 1;
+    const healthMultiplier = playthrough === 4 ? 1.65 : playthrough === 3 ? 1.45 : playthrough === 2 ? 1.3 : 1;
+    const damageMultiplier = playthrough === 4 ? 1.3 : playthrough === 3 ? 1.18 : playthrough === 2 ? 1.15 : 1;
+    const speedMultiplier = playthrough === 4 ? 1.18 : playthrough === 3 ? 1.12 : playthrough === 2 ? 1.08 : 1;
+    const cooldownMultiplier = playthrough === 4 ? 0.88 : playthrough === 3 ? 0.92 : playthrough === 2 ? 0.95 : 1;
     enemy.maxHp = Math.ceil(base.maxHp * healthMultiplier);
     enemy.damage = base.damage * damageMultiplier;
     enemy.speed = base.speed * speedMultiplier;
@@ -269,6 +311,9 @@ const state = {
   arenaKillsThisWave: 0,
   arenaFinalBossDefeated: false,
   arenaBestWave: 0,
+  challengerDialogOpen: false,
+  cutscenePhase: "", cutsceneTimer: 0,
+  elevatorMode: false, elevatorWave: 0, elevatorKills: 0, elevatorHeight: 0,
   playthrough: 1,
   regenTimer: 5,
   lastTime: performance.now(),
@@ -382,6 +427,10 @@ function saveGame(announce = true) {
       arenaKillsThisWave: state.arenaKillsThisWave,
       arenaFinalBossDefeated: state.arenaFinalBossDefeated,
       arenaBestWave: state.arenaBestWave,
+      challengerDialogOpen: state.challengerDialogOpen,
+      cutscenePhase: state.cutscenePhase, cutsceneTimer: state.cutsceneTimer,
+      elevatorMode: state.elevatorMode, elevatorWave: state.elevatorWave,
+      elevatorKills: state.elevatorKills, elevatorHeight: state.elevatorHeight,
       playthrough: state.playthrough,
     },
     shards: shards.map((shard) => shard.collected),
@@ -489,7 +538,7 @@ function loadGame() {
     player.beard = Boolean(player.beard);
     player.glasses = Boolean(player.glasses);
     Object.assign(state, save.state, { gameOver: false, paused: false, secretBuffer: "", dialog: false, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, lastTime: performance.now() });
-    state.playthrough = [1, 2, 3].includes(save.state.playthrough) ? save.state.playthrough : 1;
+    state.playthrough = [1, 2, 3, 4].includes(save.state.playthrough) ? save.state.playthrough : 1;
     setEnemyDifficulty(state.playthrough);
     state.powerTimer = Number.isFinite(save.state.powerTimer) ? Math.max(0, Math.min(8, save.state.powerTimer)) : 0;
     state.modeTimer = Number.isFinite(save.state.modeTimer) ? Math.max(0, Math.min(10, save.state.modeTimer)) : 0;
@@ -507,6 +556,20 @@ function loadGame() {
     state.arenaFinalBossDefeated = Boolean(save.state.arenaFinalBossDefeated);
     state.arenaBestWave = Number.isFinite(save.state.arenaBestWave)
       ? Math.max(0, Math.floor(save.state.arenaBestWave)) : 0;
+    state.challengerDialogOpen = state.arenaMode && state.arenaRestRoom
+      && Boolean(save.state.challengerDialogOpen);
+    state.cutscenePhase = ["author", "push", "stand", "light"].includes(save.state.cutscenePhase)
+      ? save.state.cutscenePhase : "";
+    state.cutsceneTimer = Number.isFinite(save.state.cutsceneTimer)
+      ? Math.max(0, Math.min(4, save.state.cutsceneTimer)) : 0;
+    state.elevatorMode = state.arenaMode && Boolean(save.state.elevatorMode);
+    state.elevatorWave = state.elevatorMode && Number.isFinite(save.state.elevatorWave)
+      ? Math.max(1, Math.min(ELEVATOR_TOTAL_WAVES, Math.floor(save.state.elevatorWave))) : 0;
+    state.elevatorKills = state.elevatorMode && Number.isFinite(save.state.elevatorKills)
+      ? Math.max(0, Math.min(ELEVATOR_ENEMIES_PER_WAVE - 1, Math.floor(save.state.elevatorKills))) : 0;
+    state.elevatorHeight = Number.isFinite(save.state.elevatorHeight)
+      ? Math.max(0, save.state.elevatorHeight) : 0;
+    if (state.cutscenePhase) state.arenaRestRoom = false;
     Object.assign(player, { action: "idle", actionTimer: 0, hurtTimer: 0, potionTimer: 0, walkCycle: 0 });
     state.hasShield = true;
     state.bodyColor = player.bodyColor || state.bodyColor;
@@ -640,9 +703,9 @@ function loadGame() {
     arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
     arenaBossPool.forEach((boss) => { boss.active = false; });
     arenaFinalBoss.active = false;
-    if (state.arenaMode && !state.arenaRestRoom) {
-      const combatant = getArenaWaveCombatant();
-      configureArenaCombatant(combatant, state.arenaWave);
+    if (state.arenaMode && !state.arenaRestRoom && !state.cutscenePhase) {
+      const combatant = state.elevatorMode ? getElevatorCombatant() : getArenaWaveCombatant();
+      configureArenaCombatant(combatant, state.elevatorMode ? 45 + state.elevatorWave : state.arenaWave);
       combatant.hp = combatant.maxHp;
       restoreCombatant(combatant, save.arenaCombatant);
       combatant.active = true;
@@ -693,7 +756,9 @@ function loadGame() {
     }
     shop.hidden = true;
     betting.hidden = true;
-    restartButton.textContent = state.arenaMode ? "返回正常世界（X）" : "重新開始（X）";
+    restartButton.textContent = state.elevatorMode ? "重新挑戰電梯（X）"
+      : state.arenaMode ? "返回正常世界（X）" : "重新開始（X）";
+    restartButton.disabled = Boolean(state.cutscenePhase);
     const savedDate = save.savedAt ? new Date(save.savedAt) : null;
     const savedLabel = savedDate && !Number.isNaN(savedDate.getTime())
       ? savedDate.toLocaleString()
@@ -701,6 +766,11 @@ function loadGame() {
     if (state.playthrough === 1 && state.worldReturned && state.voidBossDefeated && !legacyEnding) {
       startSecondPlaythrough();
       setMessage("已讀取第一周目通關存檔，二周目已開始。裝備、道具與金錢已保留。");
+      return true;
+    }
+    if (state.playthrough === 3 && state.arenaMode && state.arenaRestRoom
+      && state.arenaFinalBossDefeated && !state.cutscenePhase && !state.elevatorMode) {
+      beginArenaFinale();
       return true;
     }
     setMessage(`已讀取進度（${savedLabel}）。`);
@@ -714,6 +784,8 @@ function loadGame() {
 function clearSave() {
   try {
     localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(FOURTH_UNLOCK_KEY);
+    refreshFourthMenu();
     setMessage("存檔已清除。");
   } catch (error) {
     setMessage("無法清除存檔，請檢查瀏覽器儲存權限。");
@@ -733,7 +805,9 @@ function resetGame() {
     authorBossDefeated: false, screenFlipTimer: 0, trueFinalExitEntered: false,
     arenaMode: false, arenaRestRoom: false, arenaWave: 0, arenaBossActive: false,
     arenaKillsThisWave: 0, arenaFinalBossDefeated: false,
-    arenaBestWave: 0, playthrough: 1, secretBuffer: "",
+    arenaBestWave: 0, challengerDialogOpen: false, playthrough: 1, secretBuffer: "",
+    cutscenePhase: "", cutsceneTimer: 0,
+    elevatorMode: false, elevatorWave: 0, elevatorKills: 0, elevatorHeight: 0,
     regenTimer: 5, lastTime: performance.now(),
     ruinObjectiveComplete: false,
     ruinRuneCount: 0,
@@ -826,6 +900,7 @@ function resetGame() {
   shop.hidden = true;
   betting.hidden = true;
   restartButton.textContent = "重新開始（X）";
+  restartButton.disabled = false;
   setMessage("遊戲已重新開始。盾牌可直接按 E 使用；前往老人身邊按 F 開始教學。");
 }
 
@@ -855,6 +930,23 @@ function startNewGame() {
   beardInput.checked = player.beard;
   glassesInput.checked = player.glasses;
   showGame();
+}
+
+function refreshFourthMenu(forceUnlocked = false) {
+  let unlocked = forceUnlocked;
+  try { unlocked ||= localStorage.getItem(FOURTH_UNLOCK_KEY) === "1"; } catch (error) { /* Keep the current session state. */ }
+  startFourthButton.hidden = !unlocked;
+  mainMenu.dataset.playthrough = unlocked ? "4" : "1";
+}
+
+function enterFourthPlaythrough() {
+  let savedFourth = false;
+  try { savedFourth = JSON.parse(localStorage.getItem(SAVE_KEY))?.state?.playthrough === 4; } catch (error) { /* A fresh fourth run is still possible. */ }
+  if (savedFourth) {
+    showGame();
+    if (loadGame()) return;
+  }
+  startPlaythrough(4);
 }
 
 function playSound(frequency, duration = 0.08, type = "square") {
@@ -978,6 +1070,10 @@ function buyItem(item) {
 
 function switchDimension() {
   if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.dialog || state.paused) return;
+  if (state.cutscenePhase || state.elevatorMode) {
+    if (state.elevatorMode) setMessage("電梯內無法切換維度。");
+    return;
+  }
   if (state.trueFinalMap && state.authorRevealed && !state.authorBossDefeated) {
     setMessage("作者封鎖了維度切換！在 2D 場地中閃避彈幕。");
     return;
@@ -1220,11 +1316,15 @@ function enterArenaMode() {
   state.arenaBossActive = false;
   state.arenaKillsThisWave = 0;
   state.arenaFinalBossDefeated = false;
+  state.challengerDialogOpen = false;
+  state.cutscenePhase = "";
+  state.elevatorMode = false;
   state.paused = false;
   state.dimension = "1D";
   state.modeTimer = 0;
   state.cooldown = 0;
   restartButton.textContent = "返回正常世界（X）";
+  restartButton.disabled = false;
   enterArenaRestRoom();
 }
 
@@ -1234,6 +1334,9 @@ function exitArenaMode() {
   state.arenaWave = 0;
   state.arenaBossActive = false;
   state.arenaKillsThisWave = 0;
+  state.challengerDialogOpen = false;
+  state.cutscenePhase = "";
+  state.elevatorMode = false;
   state.gameOver = false;
   state.paused = false;
   state.dimension = "1D";
@@ -1252,10 +1355,13 @@ function exitArenaMode() {
 
 function enterArenaRestRoom() {
   state.arenaRestRoom = true;
+  state.challengerDialogOpen = false;
   state.dimension = "1D";
   state.modeTimer = 0;
   state.cooldown = 0;
   projectiles.length = 0;
+  shop.hidden = true;
+  betting.hidden = true;
   arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
   arenaBossPool.forEach((boss) => { boss.active = false; });
   arenaFinalBoss.active = false;
@@ -1265,12 +1371,16 @@ function enterArenaRestRoom() {
   setMessage(state.arenaFinalBossDefeated
     ? "第 50 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。"
     : state.playthrough === 2 && state.authorBossDefeated
-    ? "已抵達競技場休息室！與挑戰者交談，或從中央門進入三周目。"
-    : `已抵達競技場${state.arenaWave === 0 ? "起始" : ""}休息室！與挑戰者交談，或從中央門開始挑戰。`);
+    ? "已抵達競技場休息室！左側可與挑戰者交談，右側商人可補給，中央門進入三周目。"
+    : `已抵達競技場${state.arenaWave === 0 ? "起始" : ""}休息室！可與挑戰者交談、找商人補給，或從中央門繼續挑戰。`);
   saveGame(false);
 }
 
 function restartArenaAfterDeath() {
+  if (state.elevatorMode) {
+    restartElevatorAfterDeath();
+    return;
+  }
   state.gameOver = false;
   state.arenaWave = 0;
   state.arenaBossActive = false;
@@ -1299,7 +1409,7 @@ function getChallengerDialogue() {
 
 function arenaWaveMaxHp(combatant, wave) {
   const base = baseCombatStats.get(combatant).maxHp;
-  const multiplier = state.playthrough === 3 ? 1.45 : state.playthrough === 2 ? 1.3 : 1;
+  const multiplier = state.playthrough === 4 ? 1.65 : state.playthrough === 3 ? 1.45 : state.playthrough === 2 ? 1.3 : 1;
   return Math.ceil(base * multiplier) + Math.floor((wave - 1) / 10);
 }
 
@@ -1314,9 +1424,9 @@ function getArenaWaveCombatant() {
 function configureArenaCombatant(combatant, wave) {
   const base = baseCombatStats.get(combatant);
   const stage = Math.floor((wave - 1) / 10);
-  const strength = state.playthrough === 3 ? 1.18 : state.playthrough === 2 ? 1.15 : 1;
-  const speed = state.playthrough === 3 ? 1.12 : state.playthrough === 2 ? 1.08 : 1;
-  const cooldown = state.playthrough === 3 ? 0.92 : state.playthrough === 2 ? 0.95 : 1;
+  const strength = state.playthrough === 4 ? 1.3 : state.playthrough === 3 ? 1.18 : state.playthrough === 2 ? 1.15 : 1;
+  const speed = state.playthrough === 4 ? 1.18 : state.playthrough === 3 ? 1.12 : state.playthrough === 2 ? 1.08 : 1;
+  const cooldown = state.playthrough === 4 ? 0.88 : state.playthrough === 3 ? 0.92 : state.playthrough === 2 ? 0.95 : 1;
   combatant.maxHp = arenaWaveMaxHp(combatant, wave);
   combatant.damage = Math.min(2.9, base.damage * strength + stage * 0.12);
   combatant.speed = base.speed * speed * (1 + stage * 0.04);
@@ -1340,7 +1450,10 @@ function spawnNextArenaWave() {
   state.arenaWave += 1;
   state.arenaBossActive = false;
   state.arenaKillsThisWave = 0;
+  state.challengerDialogOpen = false;
   projectiles.length = 0;
+  shop.hidden = true;
+  betting.hidden = true;
   const combatant = spawnArenaCombatant();
   player.x = 120;
   player.y = 370;
@@ -1349,15 +1462,19 @@ function spawnNextArenaWave() {
 }
 
 function advanceArenaAfterDefeat() {
+  if (state.elevatorMode) {
+    advanceElevatorAfterDefeat();
+    return;
+  }
   projectiles.length = 0;
   player.money += state.arenaBossActive ? 35 : 12;
   if (state.arenaBossActive) {
     state.arenaBestWave = Math.max(state.arenaBestWave, state.arenaWave);
-    if (state.arenaWave === ARENA_TOTAL_WAVES) state.arenaFinalBossDefeated = true;
-    enterArenaRestRoom();
-    if (state.arenaFinalBossDefeated) {
-      setMessage("第 50 波最終 Boss 已擊敗！你完成了競技場挑戰。與挑戰者交談，或從中央門返回正常世界。");
+    if (state.arenaWave === ARENA_TOTAL_WAVES) {
+      beginArenaFinale();
+      return;
     }
+    enterArenaRestRoom();
     return;
   }
   state.arenaKillsThisWave += 1;
@@ -1374,6 +1491,127 @@ function advanceArenaAfterDefeat() {
   }
 }
 
+function beginArenaFinale() {
+  state.arenaFinalBossDefeated = true;
+  state.arenaRestRoom = false;
+  state.arenaBossActive = false;
+  state.cutscenePhase = "author";
+  state.cutsceneTimer = 3.4;
+  projectiles.length = 0;
+  arenaFinalBoss.active = false;
+  keys.clear();
+  restartButton.disabled = true;
+  setMessage("作者再次現身：「你以為你能殺死我？」");
+  saveGame(false);
+}
+
+function updateArenaFinale(dt) {
+  state.cutsceneTimer = Math.max(0, state.cutsceneTimer - dt);
+  if (state.cutsceneTimer > 0) return;
+  if (state.cutscenePhase === "author") {
+    state.cutscenePhase = "push";
+    state.cutsceneTimer = 3;
+    setMessage("挑戰者衝了出來，把你推進電梯！");
+  } else if (state.cutscenePhase === "push") {
+    state.cutscenePhase = "stand";
+    state.cutsceneTimer = 2.8;
+    setMessage("挑戰者：「你先走。這次換我獨自面對作者。」");
+  } else if (state.cutscenePhase === "stand") {
+    startElevator();
+  } else if (state.cutscenePhase === "light") {
+    finishElevator();
+  }
+  saveGame(false);
+}
+
+function getElevatorCombatant() {
+  return arenaEnemyPool[(state.elevatorWave + state.elevatorKills - 1) % arenaEnemyPool.length];
+}
+
+function spawnElevatorCombatant() {
+  arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
+  const combatant = getElevatorCombatant();
+  configureArenaCombatant(combatant, 45 + state.elevatorWave);
+  Object.assign(combatant, {
+    x: combatant.startX, y: combatant.startY, hp: combatant.maxHp,
+    attackCooldown: combatant.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0, active: true,
+  });
+  return combatant;
+}
+
+function startElevator() {
+  state.cutscenePhase = "";
+  state.cutsceneTimer = 0;
+  state.elevatorMode = true;
+  state.elevatorWave = 1;
+  state.elevatorKills = 0;
+  state.elevatorHeight = 0;
+  state.dimension = "1D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  player.x = 240;
+  player.y = 370;
+  player.hp = player.maxHp;
+  projectiles.length = 0;
+  shop.hidden = true;
+  betting.hidden = true;
+  restartButton.disabled = false;
+  restartButton.textContent = "重新挑戰電梯（X）";
+  spawnElevatorCombatant();
+  setMessage("電梯正在上升！第 1 / 5 波：擊敗 5 名敵人。");
+  saveGame(false);
+}
+
+function advanceElevatorAfterDefeat() {
+  projectiles.length = 0;
+  player.money += 12;
+  state.elevatorKills += 1;
+  if (state.elevatorKills < ELEVATOR_ENEMIES_PER_WAVE) {
+    const enemy = spawnElevatorCombatant();
+    setMessage(`電梯第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波：${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE} 名已擊敗，${enemy.type} 出現！`);
+  } else if (state.elevatorWave < ELEVATOR_TOTAL_WAVES) {
+    state.elevatorWave += 1;
+    state.elevatorKills = 0;
+    player.hp = Math.min(player.maxHp, player.hp + 0.5);
+    spawnElevatorCombatant();
+    setMessage(`電梯繼續上升！第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波開始。`);
+    saveGame(false);
+  } else {
+    state.elevatorMode = false;
+    state.cutscenePhase = "light";
+    state.cutsceneTimer = 3.5;
+    arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
+    player.x = W / 2;
+    keys.clear();
+    restartButton.disabled = true;
+    setMessage("第五波完成！電梯頂端打開，一道光照向主角……");
+    saveGame(false);
+  }
+}
+
+function restartElevatorAfterDeath() {
+  state.gameOver = false;
+  state.paused = false;
+  state.attackTimer = 0;
+  state.shieldTimer = 0;
+  player.hurtTimer = 0;
+  keys.clear();
+  startElevator();
+  setMessage("電梯挑戰失敗，從第 1 波重新開始。");
+}
+
+function finishElevator() {
+  state.cutscenePhase = "";
+  state.elevatorMode = false;
+  startPlaythrough(4);
+  try { localStorage.setItem(FOURTH_UNLOCK_KEY, "1"); } catch (error) { /* The current session still unlocks. */ }
+  refreshFourthMenu(true);
+  gameContent.hidden = true;
+  mainMenu.hidden = false;
+  keys.clear();
+  setMessage("電梯抵達頂端。四周目已解鎖，從主選單進入。");
+}
+
 function startPlaythrough(playthrough) {
   const carriedPlayer = { ...player, itemPurchases: { ...player.itemPurchases } };
   resetGame();
@@ -1386,7 +1624,9 @@ function startPlaythrough(playthrough) {
   beardInput.checked = player.beard;
   glassesInput.checked = player.glasses;
   showGame();
-  setMessage(`${playthrough === 3 ? "三" : "二"}周目開始！敵人與 Boss 變強了。先去找老人，他會告訴你前往維度核心的真正目標。`);
+  setMessage(playthrough === 4
+    ? "四周目開始！挑戰者留在競技場面對作者，你再次踏入重置後的世界。"
+    : `${playthrough === 3 ? "三" : "二"}周目開始！敵人與 Boss 變強了。先去找老人，他會告訴你前往維度核心的真正目標。`);
   saveGame(false);
 }
 
@@ -1422,7 +1662,28 @@ function jumpToThirdPlaythroughGate() {
   saveGame(false);
 }
 
+function jumpToArenaWave50() {
+  if (state.playthrough !== 3 || !state.arenaMode) {
+    jumpToThirdPlaythroughGate();
+    startThirdPlaythrough();
+  } else {
+    enterArenaMode();
+  }
+  state.arenaWave = ARENA_TOTAL_WAVES - 1;
+  spawnNextArenaWave();
+  player.hp = player.maxHp;
+  setMessage("密技成功！已到競技場第 50 波。先擊敗 5 名敵人，再挑戰最終 Boss。");
+  saveGame(false);
+}
+
 function getElderLessons() {
+  if (state.playthrough === 4) return [
+    "",
+    "挑戰者留在競技場，獨自擋住了作者。",
+    "電梯把你送回重置後的世界；這是第四次旅程。",
+    "敵人比以前更強。先集結力量，再穿越十一張地圖。",
+    "前往維度核心，尋找作者與挑戰者的下落。",
+  ];
   return state.playthrough >= 2 ? [
     "",
     "這次世界仍不穩定，真正的出口藏在維度核心。",
@@ -1441,8 +1702,17 @@ function getElderLessons() {
 function interact() {
   if (gameContent.hidden || state.gameOver || state.paused) return;
   if (state.arenaMode) {
-    if (state.arenaRestRoom && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
-      setMessage(getChallengerDialogue());
+    if (state.cutscenePhase) return;
+    if (state.challengerDialogOpen) {
+      state.challengerDialogOpen = false;
+      setMessage("對話結束。從中央門繼續挑戰。");
+    } else if (state.elevatorMode) {
+      setMessage(`電梯正在上升：第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波，擊敗 5 名敵人。`);
+    } else if (state.arenaRestRoom && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
+      state.challengerDialogOpen = true;
+      setMessage("挑戰者正在和你說話，按 F 關閉對話框。");
+    } else if (state.arenaRestRoom && distanceToMerchant() < 90) {
+      toggleShop();
     } else if (state.arenaRestRoom && state.arenaFinalBossDefeated
       && Math.hypot(player.x - arenaContinueGate.x, player.y - arenaContinueGate.y) < 85) {
       exitArenaMode();
@@ -1651,7 +1921,7 @@ function interact() {
 }
 
 function attackOrParry() {
-  if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.paused) return;
+  if (state.gameOver || state.cutscenePhase || (state.worldReturned && !state.arenaMode) || state.paused) return;
   if (isShieldActive()) {
     state.comboCount = 0;
     state.comboTimer = 0;
@@ -1730,7 +2000,8 @@ function distanceToEnemy(enemy) {
 }
 
 function getCombatants() {
-  if (state.arenaMode) return state.arenaRestRoom ? [] : state.arenaBossActive
+  if (state.arenaMode) return state.cutscenePhase || state.arenaRestRoom ? [] : state.elevatorMode
+    ? arenaEnemyPool : state.arenaBossActive
     ? state.arenaWave === ARENA_TOTAL_WAVES ? [arenaFinalBoss] : arenaBossPool
     : arenaEnemyPool;
   if (state.trueFinalMap) return [state.authorRevealed ? authorBoss : trueFinalBoss];
@@ -1753,7 +2024,7 @@ function isShieldActive() {
 }
 
 function activateShield() {
-  if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.paused) return;
+  if (state.gameOver || state.cutscenePhase || (state.worldReturned && !state.arenaMode) || state.paused) return;
   if (!state.hasShield) {
     setMessage("你還沒有盾牌，先完成老人的教學。");
     return;
@@ -2101,6 +2372,11 @@ function activateNextFrostEnemy() {
 
 function update(dt) {
   if (gameContent.hidden || state.gameOver || (state.worldReturned && !state.arenaMode) || state.paused) return;
+  if (state.cutscenePhase) {
+    updateArenaFinale(dt);
+    return;
+  }
+  if (state.elevatorMode) state.elevatorHeight += dt * 95;
   const horizontal = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
   const vertical = state.dimension === "2D"
     ? (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0)
@@ -2357,6 +2633,28 @@ function drawPortal(x, y, unlocked, color) {
 function drawBackground() {
   const twoD = state.dimension === "2D";
   drawAmbientBackdrop();
+  if (state.elevatorMode) {
+    ctx.fillStyle = "#12172a";
+    ctx.fillRect(0, 74, W, H - 74);
+    ctx.fillStyle = "#343e59";
+    ctx.fillRect(75, 74, 30, 430);
+    ctx.fillRect(855, 74, 30, 430);
+    ctx.strokeStyle = "#8494b6";
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(115, 74); ctx.lineTo(115, 390); ctx.moveTo(845, 74); ctx.lineTo(845, 390); ctx.stroke();
+    for (let y = -100 + (state.elevatorHeight % 110); y < H; y += 110) {
+      ctx.fillStyle = "#53617d";
+      ctx.fillRect(106, y, 18, 12);
+      ctx.fillRect(836, y, 18, 12);
+    }
+    ctx.fillStyle = "#36475c";
+    ctx.fillRect(120, 385, 720, 36);
+    ctx.fillStyle = "#8fb2ba";
+    ctx.fillRect(120, 382, 720, 7);
+    drawText("上升中的電梯", 24, 105, 16, "#b9e5ff");
+    drawText(`第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波・敵人 ${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`, 24, 130, 13, "#d8eaff");
+    return;
+  }
   if (state.arenaMode) {
     if (state.arenaRestRoom) {
       drawText("競技場休息室", 24, 105, 16, "#b8ffe1");
@@ -2908,10 +3206,12 @@ function drawShards() {
 }
 
 function getCurrentObjective() {
+  if (state.cutscenePhase) return "劇情進行中";
+  if (state.elevatorMode) return `電梯第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波：敵人 ${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`;
   if (state.arenaRestRoom && state.arenaFinalBossDefeated) return "競技場完成：與挑戰者對話或從中央門返回";
   if (state.arenaRestRoom) return state.playthrough === 2 && state.authorBossDefeated
-    ? "休息室：與挑戰者交談，中央門進入三周目"
-    : "休息室：與挑戰者交談，中央門開始挑戰";
+    ? "休息室：挑戰者對話、商人補給、中央門進三周目"
+    : "休息室：挑戰者對話、商人補給、中央門挑戰";
   if (state.arenaMode) return state.arenaBossActive
     ? `競技場第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：擊敗 Boss`
     : `競技場第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：敵人 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`;
@@ -2978,8 +3278,8 @@ function drawHud() {
   ctx.fillRect(0, 72, W, 2);
   drawText(`維度：${state.dimension}`, 24, 30, 18, state.dimension === "2D" ? "#79d3c9" : "#c3c8ed");
   const extra = currentExtraMap();
-  const mapLabel = state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
-  drawText(`${mapLabel}${state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
+  const mapLabel = state.elevatorMode ? "上升電梯" : state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
+  drawText(`${mapLabel}${state.playthrough === 4 ? "・四周目" : state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
   const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
   const swordStatus = state.swordCooldown > 0 ? `${state.swordCooldown.toFixed(1)}s` : "可用";
@@ -3002,14 +3302,15 @@ function drawHud() {
     ? `裝備：${weaponLabel}＋盾`
     : state.hasSword ? `武器：${weaponLabel}` : state.hasShield ? "裝備：盾" : "空手";
   drawText(equipment, 790, 56, 13, "#f4d18d");
-  drawText(`金錢：${player.money}`, 640, 56, 13, "#f4d18d");
-  drawText(`藥水 ${player.potions}・狂戰 ${player.powerPotions}・炸彈 ${player.bombs}`, 360, 20, 12, state.powerTimer > 0 ? "#ffbd69" : "#a8acc2");
-  drawText(`羅盤 ${player.compasses}・晶核 ${player.shieldCores}`, 360, 36, 12, "#a8acc2");
-  if (state.powerTimer > 0) drawText(`狂戰 ${state.powerTimer.toFixed(1)}s`, 500, 52, 12, "#ffbd69");
+  drawText(`金錢：${player.money}`, 650, 30, 13, "#f4d18d");
+  drawText(`藥水 ${player.potions}・狂戰 ${player.powerPotions}・炸彈 ${player.bombs}`, 360, 54, 12, state.powerTimer > 0 ? "#ffbd69" : "#a8acc2");
+  drawText(`羅盤 ${player.compasses}・晶核 ${player.shieldCores}`, 620, 54, 12, "#a8acc2");
+  if (state.powerTimer > 0) drawText(`狂戰 ${state.powerTimer.toFixed(1)}s`, 500, 92, 12, "#ffbd69");
   if (state.comboCount > 0) {
-    drawText(`連擊：${state.comboCount}（傷害 x${(1 + (state.comboCount - 1) * 0.25).toFixed(2)}）`, 390, 52, 13, "#f4d18d");
+    drawText(`連擊：${state.comboCount}（傷害 x${(1 + (state.comboCount - 1) * 0.25).toFixed(2)}）`, 390, 92, 13, "#f4d18d");
   }
-  const progress = state.arenaRestRoom ? (state.arenaFinalBossDefeated ? "50 波完成" : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
+  const progress = state.elevatorMode ? `電梯 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES}・${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`
+    : state.arenaRestRoom ? (state.arenaFinalBossDefeated ? "50 波完成" : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
     : state.arenaMode ? (state.arenaBossActive ? `第 ${state.arenaWave} 波 Boss` : `第 ${state.arenaWave} 波 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`)
     : state.trueFinalMap ? (!state.trueFinalBossDefeated ? "維度之源" : state.authorRevealed && !state.authorBossDefeated ? "作者" : "回歸之門")
     : extra ? (!state.extraEnemyDefeated ? extra.enemy.type : extra.boss.hp > 0 ? extra.boss.type : extra.puzzle)
@@ -3024,7 +3325,7 @@ function drawHud() {
         : `敵人 ${Math.min(state.defeatedEnemies + 1, enemies.length)} / ${enemies.length}`;
   drawText(progress, 390, 30, 13, "#a8acc2");
   if (state.bossRestTimer > 0) {
-    drawText(`休息 ${Math.ceil(state.bossRestTimer)} 秒`, 390, 52, 13, "#f4d18d");
+    drawText(`休息 ${Math.ceil(state.bossRestTimer)} 秒`, 390, 92, 13, "#f4d18d");
   }
   const target = getCombatants().find((combatant) => combatant.active && combatant.hp > 0);
   if (target) {
@@ -3072,6 +3373,7 @@ function drawTutorial() {
 }
 
 function drawMerchant() {
+  if (state.arenaMode && !state.arenaRestRoom) return;
   ctx.fillStyle = "#07091266";
   ctx.beginPath(); ctx.ellipse(merchant.x, merchant.y + 20, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#4f3550";
@@ -3105,7 +3407,84 @@ function drawChallenger() {
   drawText("挑戰者・按 F", challenger.x, challenger.y - 59, 14, "#b9e5ff", "center");
 }
 
+function drawChallengerDialog() {
+  if (!state.arenaRestRoom || !state.challengerDialogOpen) return;
+  const words = Array.from(getChallengerDialogue().replace(/^挑戰者：/, ""));
+  const lines = [words.slice(0, 32).join(""), words.slice(32).join("")].filter(Boolean);
+  ctx.save();
+  ctx.fillStyle = "#0b1422f2";
+  ctx.fillRect(110, 393, 740, 118);
+  ctx.strokeStyle = "#8ec8e6";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(110, 393, 740, 118);
+  drawText("挑戰者", 135, 421, 17, "#b9e5ff");
+  lines.forEach((line, index) => drawText(line, 135, 450 + index * 25, 16, "#f4f0df"));
+  drawText("按 F 關閉", 823, 495, 12, "#a8acc2", "right");
+  ctx.restore();
+}
+
+function drawCutsceneActor(x, y, color, label) {
+  ctx.fillStyle = "#080b14aa";
+  ctx.beginPath(); ctx.ellipse(x, y + 22, 30, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.fillRect(x - 19, y - 33, 38, 56);
+  ctx.fillStyle = "#e3ad82";
+  ctx.beginPath(); ctx.arc(x, y - 42, 17, 0, Math.PI * 2); ctx.fill();
+  drawText(label, x, y - 72, 15, "#f4f0df", "center");
+}
+
+function drawArenaFinale() {
+  const phase = state.cutscenePhase;
+  ctx.save();
+  ctx.fillStyle = phase === "light" ? "#151f37" : "#171524";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#343b55";
+  ctx.fillRect(0, 390, W, 150);
+  ctx.fillStyle = "#8f9ab1";
+  ctx.fillRect(0, 387, W, 5);
+  ctx.fillStyle = "#313c58";
+  ctx.fillRect(125, 175, 215, 220);
+  ctx.strokeStyle = "#91a8c6";
+  ctx.lineWidth = 7;
+  ctx.strokeRect(125, 175, 215, 220);
+  ctx.fillStyle = "#101929";
+  ctx.fillRect(145, 195, 175, 190);
+  if (phase === "light") {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(145, 175, 175, 15);
+    ctx.fillStyle = "#fff3b966";
+    ctx.beginPath(); ctx.moveTo(145, 185); ctx.lineTo(320, 185);
+    ctx.lineTo(400, 390); ctx.lineTo(65, 390); ctx.closePath(); ctx.fill();
+    drawCutsceneActor(230, 370, player.shirtColor, "主角");
+    drawText("電梯抵達頂端", W / 2, 100, 32, "#fff2b5", "center");
+  } else {
+    const pushing = phase === "push" ? 1 - state.cutsceneTimer / 3 : 0;
+    const protagonistX = phase === "author" ? 480 : phase === "push" ? 480 - 255 * pushing : 225;
+    drawCutsceneActor(protagonistX, 370, player.shirtColor, "主角");
+    if (phase !== "author") drawCutsceneActor(phase === "push" ? 365 - 105 * pushing : 485, 370, "#5e92bd", "挑戰者");
+    drawCutsceneActor(725, 370, "#77508d", "作者");
+    ctx.strokeStyle = "#d270e9";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(725, 300, 58, 0, Math.PI * 2); ctx.stroke();
+    drawText(phase === "author" ? "作者再次現身" : phase === "push" ? "挑戰者把主角推進電梯" : "挑戰者獨自面對作者", W / 2, 103, 29, "#ffd4ef", "center");
+  }
+  ctx.fillStyle = "#090c19ec";
+  ctx.fillRect(110, 440, 740, 74);
+  ctx.strokeStyle = "#d7aedc";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(110, 440, 740, 74);
+  drawText(phase === "author" ? "作者：「你以為你能殺死我？」"
+    : phase === "push" ? "挑戰者：「快進電梯！這裡交給我。」"
+    : phase === "stand" ? "挑戰者：「你先走。這次換我獨自面對作者。」"
+    : "上方的光照向主角，新的輪迴即將開始。", W / 2, 484, 19, "#f4f0df", "center");
+  ctx.restore();
+}
+
 function draw() {
+  if (state.cutscenePhase) {
+    drawArenaFinale();
+    return;
+  }
   ctx.save();
   if (state.trueFinalMap && state.authorRevealed && !state.authorBossDefeated && state.screenFlipTimer > 0) {
     ctx.translate(W, H);
@@ -3130,6 +3509,7 @@ function draw() {
   drawCharacter();
   drawHud();
   drawTutorial();
+  drawChallengerDialog();
   if (state.paused && !state.gameOver) {
     ctx.fillStyle = "#080912b8";
     ctx.fillRect(0, 0, W, H);
@@ -3179,6 +3559,10 @@ function loop(now) {
 
 document.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
+  if (state.cutscenePhase) {
+    if (["a", "w", "d", "s", "f", "x", "c", "e"].includes(key)) event.preventDefault();
+    return;
+  }
   if (!event.repeat && ["a", "w", "d", "s"].includes(key)) {
     state.secretBuffer = `${state.secretBuffer || ""}${key.toUpperCase()}`.slice(-SECRET_BUFFER_LENGTH);
     if (state.secretBuffer.endsWith(SECRET_SEQUENCE)) {
@@ -3190,6 +3574,12 @@ document.addEventListener("keydown", (event) => {
     if (state.secretBuffer.endsWith(THIRD_SEQUENCE)) {
       state.secretBuffer = "";
       jumpToThirdPlaythroughGate();
+      event.preventDefault();
+      return;
+    }
+    if (state.secretBuffer.endsWith(ARENA_FIFTY_SEQUENCE)) {
+      state.secretBuffer = "";
+      jumpToArenaWave50();
       event.preventDefault();
       return;
     }
@@ -3206,7 +3596,8 @@ document.addEventListener("keydown", (event) => {
   if (key === "x") {
     event.preventDefault();
     if (!event.repeat) {
-      if (state.arenaMode) exitArenaMode();
+      if (state.elevatorMode) restartElevatorAfterDeath();
+      else if (state.arenaMode) exitArenaMode();
       else resetGame();
     }
     return;
@@ -3253,10 +3644,10 @@ document.addEventListener("keydown", (event) => {
   const nearChallenger = state.arenaRestRoom
     && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85;
   if (key === "f") {
-    if (nearElder || nearGate || nearRuinExit || nearSanctumExit || nearFrostExit || nearVoidExit || nearExtraExit || nearTrueFinalExit || nearArena || nearThirdGate || nearArenaContinue || nearChallenger) interact();
-    else if (distanceToMerchant() < 90) toggleShop();
+    if (state.challengerDialogOpen || nearElder || nearGate || nearRuinExit || nearSanctumExit || nearFrostExit || nearVoidExit || nearExtraExit || nearTrueFinalExit || nearArena || nearThirdGate || nearArenaContinue || nearChallenger) interact();
+    else if ((!state.arenaMode || state.arenaRestRoom) && distanceToMerchant() < 90) toggleShop();
   }
-  if (key === "g" && distanceToMerchant() < 90) toggleBetting();
+  if (key === "g" && (!state.arenaMode || state.arenaRestRoom) && distanceToMerchant() < 90) toggleBetting();
   if (key === "r" && player.potions > 0 && player.hp < player.maxHp) {
     player.potions -= 1;
     player.hp = Math.min(player.maxHp, player.hp + 1);
@@ -3345,12 +3736,15 @@ betting.addEventListener("click", (event) => {
   if (button) placeBet(button.dataset.guess);
 });
 restartButton.addEventListener("click", () => {
-  if (state.arenaMode) exitArenaMode();
+  if (state.cutscenePhase) return;
+  if (state.elevatorMode) restartElevatorAfterDeath();
+  else if (state.arenaMode) exitArenaMode();
   else resetGame();
 });
 loadSaveButton.addEventListener("click", loadGame);
 clearSaveButton.addEventListener("click", clearSave);
 startGameButton.addEventListener("click", startNewGame);
+startFourthButton.addEventListener("click", enterFourthPlaythrough);
 menuLoadSaveButton.addEventListener("click", () => {
   let hasSave = false;
   try {
@@ -3380,5 +3774,6 @@ volumeInput.addEventListener("input", () => {
   saveAudioSettings();
 });
 loadAudioSettings();
+refreshFourthMenu();
 
 setInterval(() => loop(performance.now()), 16);

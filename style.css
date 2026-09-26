@@ -23,6 +23,16 @@ body { margin: 0; min-height: 100vh; display: grid; place-items: center; }
 .in-game-audio { margin: 9px 0; }
 .main-menu button { display: block; width: 100%; margin-top: 10px; border: 1px solid #8e7450; padding: 10px; background: #42354b; color: #f4f0df; cursor: pointer; font: inherit; }
 .main-menu button:hover { background: #5d4655; }
+.main-menu[data-playthrough="4"] button { animation: menu-shake .28s infinite alternate ease-in-out; }
+.main-menu[data-playthrough="4"] button:nth-of-type(2) { animation-delay: -.13s; }
+.main-menu[data-playthrough="4"] button:nth-of-type(3) { animation-delay: -.07s; }
+@keyframes menu-shake {
+  from { transform: translate(-2px, 1px) rotate(-.4deg); }
+  to { transform: translate(2px, -1px) rotate(.4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-menu[data-playthrough="4"] button { animation: none; }
+}
 header { display: flex; align-items: end; justify-content: space-between; margin-bottom: 14px; }
 .eyebrow { margin: 0 0 4px; color: #efad62; font-size: 12px; letter-spacing: .2em; }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 36px); }
