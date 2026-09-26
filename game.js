@@ -42,6 +42,13 @@ const AUDIO_SETTINGS_KEY = "pixel-odyssey-2d-audio";
 const SHOP_BASE_PRICES = { armor: 45, potion: 30, weapon: 75, bow: 110, staff: 140, power: 55, boots: 65, bomb: 40, compass: 35, core: 50 };
 const SHOP_ITEM_NAMES = { armor: "防具", potion: "生命藥水", weapon: "強化武器", bow: "光能弓", staff: "虛空法杖", power: "狂戰藥水", boots: "迅捷靴", bomb: "星塵炸彈", compass: "解謎羅盤", core: "護盾晶核" };
 const SECRET_SEQUENCE = "AAWWDDSS";
+const THIRD_SEQUENCE = "DDDWWWAAASSSAWDS";
+const MONEY_SEQUENCE = "AWDSSDWASSDWASSADWSS";
+const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, MONEY_SEQUENCE.length);
+const DIMENSION_COOLDOWN = 5;
+const AUTHOR_INTRO_DURATION = 3.5;
+const ARENA_TOTAL_WAVES = 50;
+const ARENA_ENEMIES_PER_WAVE = 5;
 const audioSettings = { enabled: true, volume: 0.6 };
 
 const keys = new Set();
@@ -146,6 +153,12 @@ const arenaBossPool = [
   { type: "競技炎魔", attackType: "smash", color: "#f05c4f", size: 64, hp: 20, speed: 0.72, range: 145, cooldown: 1.5, damage: 2.5 },
   { type: "競技虛空龍", attackType: "void", color: "#d05cff", size: 72, hp: 25, speed: 0.82, range: 270, cooldown: 1.2, damage: 2.5 },
 ].map((boss) => ({ ...boss, x: 650, y: 370, maxHp: boss.hp, startX: 650, startY: 370, active: false, attackCooldown: boss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
+const arenaFinalBoss = {
+  type: "競技場最終 Boss：無盡霸主", attackType: "void", color: "#ffca6e",
+  x: 680, y: 370, size: 78, hp: 58, maxHp: 58, speed: 0.78,
+  range: 270, cooldown: 1.3, damage: 2.3, startX: 680, startY: 370,
+  active: false, attackCooldown: 1.3, attackWindup: 0, stunned: 0, hitFlash: 0,
+};
 const enemies = [
   { type: "追獵者", attackType: "melee", color: "#b54868", x: 390, y: 370, size: 28, hp: 3, maxHp: 3, speed: 1.05, range: 78, cooldown: 1.5, damage: 1 },
   { type: "迅捷者", attackType: "dash", color: "#d77b45", x: 500, y: 370, size: 23, hp: 2, maxHp: 2, speed: 1.75, range: 65, cooldown: 1.1, damage: 1 },
@@ -162,6 +175,46 @@ const bosses = [
   { type: "熔岩巨像", attackType: "smash", color: "#c05d3d", x: 480, y: 370, size: 62, hp: 14, maxHp: 14, speed: 0.5, range: 130, cooldown: 1.9, damage: 2 },
   { type: "維度之王", attackType: "dimension", color: "#d1a647", x: 480, y: 370, size: 62, hp: 12, maxHp: 12, speed: 0.7, range: 150, cooldown: 1.5, damage: 1 },
 ].map((boss) => ({ ...boss, startX: boss.x, startY: boss.y, active: false, attackCooldown: boss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
+const trueFinalBoss = {
+  type: "真・最終 Boss：維度之源", attackType: "void", color: "#f763d8",
+  x: 650, y: 370, size: 84, hp: 48, maxHp: 48, speed: 0.82, range: 270,
+  cooldown: 1.1, damage: 2, startX: 650, startY: 370, active: false,
+  attackCooldown: 1.1, attackWindup: 0, stunned: 0, hitFlash: 0,
+};
+const authorBoss = {
+  type: "真・最終 Boss：作者", attackType: "author", color: "#f4d18d",
+  x: elder.x, y: elder.y, size: 76, hp: 64, maxHp: 64, speed: 1,
+  range: 330, cooldown: 0.95, damage: 2.1, startX: elder.x, startY: elder.y,
+  active: false, attackCooldown: 0.95, attackWindup: 0, stunned: 0, hitFlash: 0,
+};
+const trueFinalExit = { x: 900, y: 370 };
+const arenaContinueGate = { x: 480, y: 370 };
+const thirdPlaythroughGate = { x: 480, y: 370 };
+const challenger = { x: 230, y: 370 };
+const allCombatants = [
+  ...enemies, ...bosses, ruinEnemy, sanctumEnemy, ...frostEnemies, voidBoss,
+  ...extraMaps.flatMap((map) => [map.enemy, map.boss]), ...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss,
+  trueFinalBoss, authorBoss,
+];
+const baseCombatStats = new Map(allCombatants.map((enemy) => [enemy, {
+  maxHp: enemy.maxHp, damage: enemy.damage || 1, speed: enemy.speed, cooldown: enemy.cooldown,
+}]));
+
+function setEnemyDifficulty(playthrough) {
+  allCombatants.forEach((enemy) => {
+    const base = baseCombatStats.get(enemy);
+    const healthMultiplier = playthrough === 3 ? 1.45 : playthrough === 2 ? 1.3 : 1;
+    const damageMultiplier = playthrough === 3 ? 1.18 : playthrough === 2 ? 1.15 : 1;
+    const speedMultiplier = playthrough === 3 ? 1.12 : playthrough === 2 ? 1.08 : 1;
+    const cooldownMultiplier = playthrough === 3 ? 0.92 : playthrough === 2 ? 0.95 : 1;
+    enemy.maxHp = Math.ceil(base.maxHp * healthMultiplier);
+    enemy.damage = base.damage * damageMultiplier;
+    enemy.speed = base.speed * speedMultiplier;
+    enemy.cooldown = base.cooldown * cooldownMultiplier;
+    enemy.hp = enemy.maxHp;
+    enemy.attackCooldown = enemy.cooldown;
+  });
+}
 const state = {
   bodyColor: bodyColorInput.value,
   eyeColor: eyeColorInput.value,
@@ -202,9 +255,20 @@ const state = {
   extraEnemyDefeated: false,
   extraPuzzleCount: 0,
   extraExitUnlocked: false,
+  trueFinalMap: false,
+  trueFinalBossDefeated: false,
+  authorRevealed: false,
+  authorIntroTimer: 0,
+  authorBossDefeated: false,
+  screenFlipTimer: 0,
+  trueFinalExitEntered: false,
   arenaMode: false,
+  arenaRestRoom: false,
   arenaWave: 0,
   arenaBossActive: false,
+  arenaKillsThisWave: 0,
+  arenaFinalBossDefeated: false,
+  arenaBestWave: 0,
   playthrough: 1,
   regenTimer: 5,
   lastTime: performance.now(),
@@ -288,6 +352,8 @@ setInterval(() => {
 }, 5000);
 
 function saveGame(announce = true) {
+  const arenaCombatant = state.arenaMode && !state.arenaRestRoom
+    ? getCombatants().find((combatant) => combatant.active) : null;
   const save = {
     player: { ...player },
     state: {
@@ -305,8 +371,17 @@ function saveGame(announce = true) {
       voidBossDefeated: state.voidBossDefeated,
       extraMap: state.extraMap, extraEnemyDefeated: state.extraEnemyDefeated,
       extraPuzzleCount: state.extraPuzzleCount, extraExitUnlocked: state.extraExitUnlocked,
-      powerTimer: state.powerTimer,
-      arenaMode: state.arenaMode, arenaWave: state.arenaWave, arenaBossActive: state.arenaBossActive,
+      trueFinalMap: state.trueFinalMap, trueFinalBossDefeated: state.trueFinalBossDefeated,
+      authorRevealed: state.authorRevealed, authorIntroTimer: state.authorIntroTimer,
+      authorBossDefeated: state.authorBossDefeated,
+      screenFlipTimer: state.screenFlipTimer,
+      trueFinalExitEntered: state.trueFinalExitEntered,
+      powerTimer: state.powerTimer, modeTimer: state.modeTimer, cooldown: state.cooldown,
+      arenaMode: state.arenaMode, arenaRestRoom: state.arenaRestRoom,
+      arenaWave: state.arenaWave, arenaBossActive: state.arenaBossActive,
+      arenaKillsThisWave: state.arenaKillsThisWave,
+      arenaFinalBossDefeated: state.arenaFinalBossDefeated,
+      arenaBestWave: state.arenaBestWave,
       playthrough: state.playthrough,
     },
     shards: shards.map((shard) => shard.collected),
@@ -345,6 +420,23 @@ function saveGame(announce = true) {
       attackCooldown: voidBoss.attackCooldown, attackWindup: voidBoss.attackWindup,
       stunned: voidBoss.stunned,
     },
+    trueFinalBoss: {
+      x: trueFinalBoss.x, y: trueFinalBoss.y, hp: trueFinalBoss.hp, active: trueFinalBoss.active,
+      attackCooldown: trueFinalBoss.attackCooldown, attackWindup: trueFinalBoss.attackWindup,
+      stunned: trueFinalBoss.stunned,
+    },
+    authorBoss: {
+      x: authorBoss.x, y: authorBoss.y, hp: authorBoss.hp, active: authorBoss.active,
+      attackCooldown: authorBoss.attackCooldown, attackWindup: authorBoss.attackWindup,
+      stunned: authorBoss.stunned, patternIndex: authorBoss.patternIndex,
+      attackPattern: authorBoss.attackPattern, safeLane: authorBoss.safeLane,
+      attackTargetX: authorBoss.attackTargetX, attackTargetY: authorBoss.attackTargetY,
+    },
+    arenaCombatant: arenaCombatant ? {
+      x: arenaCombatant.x, y: arenaCombatant.y, hp: arenaCombatant.hp,
+      attackCooldown: arenaCombatant.attackCooldown, attackWindup: arenaCombatant.attackWindup,
+      stunned: arenaCombatant.stunned,
+    } : null,
     extraMaps: extraMaps.map((map) => ({
       enemy: { x: map.enemy.x, y: map.enemy.y, hp: map.enemy.hp, active: map.enemy.active, attackCooldown: map.enemy.attackCooldown },
       boss: { x: map.boss.x, y: map.boss.y, hp: map.boss.hp, active: map.boss.active, attackCooldown: map.boss.attackCooldown },
@@ -397,11 +489,24 @@ function loadGame() {
     player.beard = Boolean(player.beard);
     player.glasses = Boolean(player.glasses);
     Object.assign(state, save.state, { gameOver: false, paused: false, secretBuffer: "", dialog: false, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, lastTime: performance.now() });
-    state.playthrough = save.state.playthrough === 2 ? 2 : 1;
+    state.playthrough = [1, 2, 3].includes(save.state.playthrough) ? save.state.playthrough : 1;
+    setEnemyDifficulty(state.playthrough);
     state.powerTimer = Number.isFinite(save.state.powerTimer) ? Math.max(0, Math.min(8, save.state.powerTimer)) : 0;
+    state.modeTimer = Number.isFinite(save.state.modeTimer) ? Math.max(0, Math.min(10, save.state.modeTimer)) : 0;
+    state.cooldown = Number.isFinite(save.state.cooldown) ? Math.max(0, Math.min(DIMENSION_COOLDOWN, save.state.cooldown)) : 0;
     state.arenaMode = Boolean(save.state.arenaMode);
-    state.arenaWave = Number.isFinite(save.state.arenaWave) ? Math.max(0, save.state.arenaWave) : 0;
-    state.arenaBossActive = Boolean(save.state.arenaBossActive);
+    state.arenaRestRoom = state.arenaMode && Boolean(save.state.arenaRestRoom);
+    state.arenaWave = state.arenaMode && Number.isFinite(save.state.arenaWave)
+      ? Math.max(state.arenaRestRoom ? 0 : 1, Math.min(50, Math.floor(save.state.arenaWave))) : 0;
+    state.arenaKillsThisWave = Number.isFinite(save.state.arenaKillsThisWave)
+      ? Math.max(0, Math.min(5, Math.floor(save.state.arenaKillsThisWave)))
+      : save.state.arenaBossActive ? 5 : 0;
+    state.arenaBossActive = state.arenaMode && !state.arenaRestRoom
+      && state.arenaWave > 0 && state.arenaWave % 5 === 0
+      && state.arenaKillsThisWave === 5 && Boolean(save.state.arenaBossActive);
+    state.arenaFinalBossDefeated = Boolean(save.state.arenaFinalBossDefeated);
+    state.arenaBestWave = Number.isFinite(save.state.arenaBestWave)
+      ? Math.max(0, Math.floor(save.state.arenaBestWave)) : 0;
     Object.assign(player, { action: "idle", actionTimer: 0, hurtTimer: 0, potionTimer: 0, walkCycle: 0 });
     state.hasShield = true;
     state.bodyColor = player.bodyColor || state.bodyColor;
@@ -429,6 +534,13 @@ function loadGame() {
       frostEnemies.forEach((enemy, index) => restoreCombatant(enemy, save.frostEnemies[index]));
     }
     restoreCombatant(voidBoss, save.voidBoss);
+    restoreCombatant(trueFinalBoss, save.trueFinalBoss);
+    restoreCombatant(authorBoss, save.authorBoss);
+    authorBoss.patternIndex = Number.isFinite(save.authorBoss?.patternIndex) ? Math.max(0, save.authorBoss.patternIndex) : 0;
+    authorBoss.attackPattern = ["fan", "lanes", "ring", "flip"].includes(save.authorBoss?.attackPattern) ? save.authorBoss.attackPattern : "fan";
+    authorBoss.safeLane = Number.isInteger(save.authorBoss?.safeLane) ? Math.max(0, Math.min(5, save.authorBoss.safeLane)) : 0;
+    authorBoss.attackTargetX = Number.isFinite(save.authorBoss?.attackTargetX) ? save.authorBoss.attackTargetX : player.x;
+    authorBoss.attackTargetY = Number.isFinite(save.authorBoss?.attackTargetY) ? save.authorBoss.attackTargetY : player.y;
     state.ruinRuneCount = Number.isFinite(save.state.ruinRuneCount) ? save.state.ruinRuneCount : 0;
     const savedRunes = Array.isArray(save.ruinRunes) ? save.ruinRunes : [];
     ruinRunes.forEach((rune, index) => {
@@ -467,6 +579,49 @@ function loadGame() {
     state.extraEnemyDefeated = Boolean(save.state.extraEnemyDefeated);
     state.extraPuzzleCount = Number.isFinite(save.state.extraPuzzleCount) ? save.state.extraPuzzleCount : 0;
     state.extraExitUnlocked = Boolean(save.state.extraExitUnlocked);
+    state.trueFinalBossDefeated = state.playthrough >= 2 && Boolean(save.state.trueFinalBossDefeated);
+    state.trueFinalMap = state.playthrough >= 2 && Boolean(save.state.trueFinalMap);
+    state.authorRevealed = state.playthrough >= 2 && Boolean(save.state.authorRevealed);
+    state.authorBossDefeated = state.playthrough >= 2 && Boolean(save.state.authorBossDefeated);
+    state.authorIntroTimer = state.authorRevealed && !state.authorBossDefeated && Number.isFinite(save.state.authorIntroTimer)
+      ? Math.max(0, Math.min(AUTHOR_INTRO_DURATION, save.state.authorIntroTimer)) : 0;
+    state.screenFlipTimer = state.authorRevealed && !state.authorBossDefeated && Number.isFinite(save.state.screenFlipTimer)
+      ? Math.max(0, Math.min(4, save.state.screenFlipTimer)) : 0;
+    state.trueFinalExitEntered = state.playthrough >= 2 && Boolean(save.state.trueFinalExitEntered);
+    if (state.playthrough >= 2 && state.worldReturned && (!state.trueFinalExitEntered || !state.authorBossDefeated)) {
+      // Older saves could end the second playthrough before the author encounter existed.
+      state.worldReturned = false;
+      state.trueFinalMap = true;
+      state.trueFinalExitEntered = false;
+      state.extraMap = 0;
+      state.arenaMode = false;
+      state.arenaRestRoom = false;
+      state.arenaWave = 0;
+      state.arenaBossActive = false;
+      state.dimension = "1D";
+      state.modeTimer = 0;
+      state.cooldown = 0;
+      trueFinalBoss.hp = state.trueFinalBossDefeated ? 0 : trueFinalBoss.maxHp;
+      state.authorRevealed = false;
+      state.authorIntroTimer = 0;
+      state.authorBossDefeated = false;
+      state.screenFlipTimer = 0;
+      authorBoss.hp = authorBoss.maxHp;
+      player.x = state.trueFinalBossDefeated ? 800 : 120;
+      player.y = 370;
+    }
+    if (state.trueFinalMap) {
+      state.arenaMode = false;
+      state.arenaRestRoom = false;
+      state.worldReturned = false;
+      if (trueFinalBoss.hp <= 0) state.trueFinalBossDefeated = true;
+      if (state.authorRevealed) state.trueFinalBossDefeated = true;
+      if (state.authorRevealed && authorBoss.hp <= 0) state.authorBossDefeated = true;
+      if (state.authorBossDefeated) {
+        state.authorIntroTimer = 0;
+        state.screenFlipTimer = 0;
+      }
+    }
     extraMaps.forEach((map) => { map.puzzleNodes.forEach((node, index) => { node.collected = index < state.extraPuzzleCount; node.nearby = false; }); map.exit.unlocked = false; map.enemy.active = false; map.boss.active = false; });
     if (Array.isArray(save.extraMaps)) save.extraMaps.forEach((savedMap, index) => {
       const map = extraMaps[index];
@@ -484,10 +639,13 @@ function loadGame() {
     }
     arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
     arenaBossPool.forEach((boss) => { boss.active = false; });
-    if (state.arenaMode) {
-      const pool = state.arenaBossActive ? arenaBossPool : arenaEnemyPool;
-      const combatant = pool[(Math.max(1, state.arenaWave) - 1) % pool.length];
-      combatant.active = combatant.hp > 0;
+    arenaFinalBoss.active = false;
+    if (state.arenaMode && !state.arenaRestRoom) {
+      const combatant = getArenaWaveCombatant();
+      configureArenaCombatant(combatant, state.arenaWave);
+      combatant.hp = combatant.maxHp;
+      restoreCombatant(combatant, save.arenaCombatant);
+      combatant.active = true;
     }
     projectiles.length = 0;
     enemies.forEach((enemy) => { enemy.active = false; });
@@ -498,7 +656,17 @@ function loadGame() {
       enemy.active = Boolean(state.frostMap && index === state.frostDefeated && enemy.hp > 0);
     });
     voidBoss.active = Boolean(state.voidMap && !state.voidBossDefeated && voidBoss.hp > 0);
-    if (state.extraMap > 0) {
+    trueFinalBoss.active = Boolean(state.trueFinalMap && !state.authorRevealed && trueFinalBoss.hp > 0);
+    authorBoss.active = Boolean(state.trueFinalMap && state.authorRevealed && authorBoss.hp > 0);
+    if (state.trueFinalMap) {
+      state.extraMap = 0;
+      sanctumEnemy.active = false;
+      ruinEnemy.active = false;
+      frostEnemies.forEach((enemy) => { enemy.active = false; });
+      voidBoss.active = false;
+      enemies.forEach((enemy) => { enemy.active = false; });
+      bosses.forEach((boss) => { boss.active = false; });
+    } else if (state.extraMap > 0) {
       state.dimension = state.extraEnemyDefeated ? "2D" : "1D";
       sanctumEnemy.active = false;
       ruinEnemy.active = false;
@@ -525,10 +693,16 @@ function loadGame() {
     }
     shop.hidden = true;
     betting.hidden = true;
+    restartButton.textContent = state.arenaMode ? "返回正常世界（X）" : "重新開始（X）";
     const savedDate = save.savedAt ? new Date(save.savedAt) : null;
     const savedLabel = savedDate && !Number.isNaN(savedDate.getTime())
       ? savedDate.toLocaleString()
       : "未知時間";
+    if (state.playthrough === 1 && state.worldReturned && state.voidBossDefeated && !legacyEnding) {
+      startSecondPlaythrough();
+      setMessage("已讀取第一周目通關存檔，二周目已開始。裝備、道具與金錢已保留。");
+      return true;
+    }
     setMessage(`已讀取進度（${savedLabel}）。`);
     return true;
   } catch (error) {
@@ -547,6 +721,7 @@ function clearSave() {
 }
 
 function resetGame() {
+  setEnemyDifficulty(1);
   Object.assign(player, { x: 150, y: 370, hp: 3, maxHp: 3, facing: 1, money: 0, armor: false, weaponLevel: 1, weaponType: "sword", pantsColor: "#29324d", shirtColor: "#efad62", hat: false, beard: false, glasses: false, potions: 0, powerPotions: 0, bombs: 0, compasses: 0, shieldCores: 0, itemPurchases: {}, speed: 3.2, action: "idle", actionTimer: 0, hurtTimer: 0, potionTimer: 0, walkCycle: 0 });
   Object.assign(state, {
     dimension: "1D", hasSword: true, hasShield: true, elderTalked: false, dialog: false,
@@ -554,7 +729,11 @@ function resetGame() {
     gameOver: false, paused: false, defeatedEnemies: 0, defeatedBosses: 0, bossPhase: false,
     worldReturned: false, nextMap: false, shardCount: 0, bossRestTimer: 0,
     extraMap: 0, extraEnemyDefeated: false, extraPuzzleCount: 0, extraExitUnlocked: false,
-    arenaMode: false, arenaWave: 0, arenaBossActive: false, playthrough: 1, secretBuffer: "",
+    trueFinalMap: false, trueFinalBossDefeated: false, authorRevealed: false, authorIntroTimer: 0,
+    authorBossDefeated: false, screenFlipTimer: 0, trueFinalExitEntered: false,
+    arenaMode: false, arenaRestRoom: false, arenaWave: 0, arenaBossActive: false,
+    arenaKillsThisWave: 0, arenaFinalBossDefeated: false,
+    arenaBestWave: 0, playthrough: 1, secretBuffer: "",
     regenTimer: 5, lastTime: performance.now(),
     ruinObjectiveComplete: false,
     ruinRuneCount: 0,
@@ -613,6 +792,15 @@ function resetGame() {
     x: voidBoss.startX, y: voidBoss.startY, hp: voidBoss.maxHp, active: false,
     attackCooldown: voidBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
   });
+  Object.assign(trueFinalBoss, {
+    x: trueFinalBoss.startX, y: trueFinalBoss.startY, hp: trueFinalBoss.maxHp, active: false,
+    attackCooldown: trueFinalBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+  });
+  Object.assign(authorBoss, {
+    x: authorBoss.startX, y: authorBoss.startY, hp: authorBoss.maxHp, active: false,
+    attackCooldown: authorBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+    patternIndex: 0, attackPattern: "fan", safeLane: 0,
+  });
   extraMaps.forEach((map) => {
     Object.assign(map.enemy, { x: map.enemy.startX, y: map.enemy.startY, hp: map.enemy.maxHp, active: false, attackCooldown: map.enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 });
     Object.assign(map.boss, { x: map.boss.startX, y: map.boss.startY, hp: map.boss.maxHp, active: false, attackCooldown: map.boss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 });
@@ -621,6 +809,10 @@ function resetGame() {
   });
   [...arenaEnemyPool, ...arenaBossPool].forEach((combatant) => {
     Object.assign(combatant, { x: combatant.startX, y: combatant.startY, hp: combatant.maxHp, active: false, attackCooldown: combatant.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 });
+  });
+  Object.assign(arenaFinalBoss, {
+    x: arenaFinalBoss.startX, y: arenaFinalBoss.startY, hp: arenaFinalBoss.maxHp,
+    active: false, attackCooldown: arenaFinalBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
   });
   keys.clear();
   pantsColorInput.value = player.pantsColor;
@@ -633,6 +825,7 @@ function resetGame() {
   floatingTexts.length = 0;
   shop.hidden = true;
   betting.hidden = true;
+  restartButton.textContent = "重新開始（X）";
   setMessage("遊戲已重新開始。盾牌可直接按 E 使用；前往老人身邊按 F 開始教學。");
 }
 
@@ -785,6 +978,10 @@ function buyItem(item) {
 
 function switchDimension() {
   if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.dialog || state.paused) return;
+  if (state.trueFinalMap && state.authorRevealed && !state.authorBossDefeated) {
+    setMessage("作者封鎖了維度切換！在 2D 場地中閃避彈幕。");
+    return;
+  }
   if (state.modeTimer > 0) {
     setMessage("你已經在 2D 維度中。");
     return;
@@ -914,7 +1111,7 @@ function currentExtraMap() {
 
 function collectExtraPuzzle() {
   const map = currentExtraMap();
-  if (!map || !state.extraEnemyDefeated || state.extraExitUnlocked || state.dimension !== "2D") return;
+  if (!map || map.boss.hp > 0 || state.extraExitUnlocked || state.dimension !== "2D") return;
   map.puzzleNodes.forEach((node, index) => {
     const nearby = Math.hypot(player.x - node.x, player.y - node.y) < 38;
     if (nearby && !node.nearby && !node.collected) {
@@ -964,49 +1161,335 @@ function enterExtraMap(index) {
   setMessage(`抵達第${index + 5}張地圖：${map.title}。${map.enemy.type} 出現了！`);
 }
 
+function enterTrueFinalMap() {
+  state.extraMap = 0;
+  state.trueFinalMap = true;
+  state.trueFinalBossDefeated = false;
+  state.authorRevealed = false;
+  state.authorIntroTimer = 0;
+  state.authorBossDefeated = false;
+  state.screenFlipTimer = 0;
+  state.trueFinalExitEntered = false;
+  state.worldReturned = false;
+  state.dimension = "1D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  projectiles.length = 0;
+  extraMaps.forEach((map) => { map.enemy.active = false; map.boss.active = false; });
+  Object.assign(trueFinalBoss, {
+    x: trueFinalBoss.startX, y: trueFinalBoss.startY, hp: trueFinalBoss.maxHp,
+    attackCooldown: trueFinalBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+    active: true,
+  });
+  authorBoss.active = false;
+  player.x = 120;
+  player.y = 370;
+  player.hp = player.maxHp;
+  setMessage("抵達真・最終地圖「維度核心」！擊敗維度之源，解鎖回歸之門，才能回到正常世界。");
+}
+
+function revealAuthorBoss() {
+  state.authorRevealed = true;
+  state.authorIntroTimer = AUTHOR_INTRO_DURATION;
+  state.screenFlipTimer = 0;
+  state.dimension = "2D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  projectiles.length = 0;
+  shop.hidden = true;
+  betting.hidden = true;
+  player.x = 120;
+  player.y = 370;
+  player.hp = player.maxHp;
+  Object.assign(authorBoss, {
+    x: authorBoss.startX, y: authorBoss.startY, hp: authorBoss.maxHp,
+    attackCooldown: authorBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+    patternIndex: 0, attackPattern: "fan", safeLane: 0, active: true,
+  });
+  setMessage("老人：「我是作者，你只是個工具人。回歸之門由我鎖上！」真・最終 Boss「作者」現身！");
+}
+
+function returnDoorUnlocked() {
+  return state.trueFinalBossDefeated && (!state.authorRevealed || state.authorBossDefeated);
+}
+
 function enterArenaMode() {
   state.arenaMode = true;
-  state.arenaWave = 1;
+  state.arenaRestRoom = true;
+  state.arenaWave = 0;
   state.arenaBossActive = false;
+  state.arenaKillsThisWave = 0;
+  state.arenaFinalBossDefeated = false;
+  state.paused = false;
+  state.dimension = "1D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  restartButton.textContent = "返回正常世界（X）";
+  enterArenaRestRoom();
+}
+
+function exitArenaMode() {
+  state.arenaMode = false;
+  state.arenaRestRoom = false;
+  state.arenaWave = 0;
+  state.arenaBossActive = false;
+  state.arenaKillsThisWave = 0;
+  state.gameOver = false;
+  state.paused = false;
+  state.dimension = "1D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  projectiles.length = 0;
+  keys.clear();
+  arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
+  arenaBossPool.forEach((boss) => { boss.active = false; });
+  arenaFinalBoss.active = false;
+  player.hp = player.maxHp;
+  restartButton.textContent = "重新開始（X）";
+  setMessage("已離開競技場，回到正常世界。");
+  saveGame(false);
+}
+
+function enterArenaRestRoom() {
+  state.arenaRestRoom = true;
+  state.dimension = "1D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
   projectiles.length = 0;
   arenaEnemyPool.forEach((enemy) => { enemy.active = false; });
   arenaBossPool.forEach((boss) => { boss.active = false; });
-  const enemy = arenaEnemyPool[0];
-  Object.assign(enemy, { x: enemy.startX, y: enemy.startY, hp: enemy.maxHp, attackCooldown: enemy.cooldown, active: true });
-  player.x = 120;
+  arenaFinalBoss.active = false;
+  player.x = 150;
   player.y = 370;
-  setMessage("競技場模式開始！每 5 波出現一名 Boss，按 X 可結束挑戰。");
+  player.hp = player.maxHp;
+  setMessage(state.arenaFinalBossDefeated
+    ? "第 50 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。"
+    : state.playthrough === 2 && state.authorBossDefeated
+    ? "已抵達競技場休息室！與挑戰者交談，或從中央門進入三周目。"
+    : `已抵達競技場${state.arenaWave === 0 ? "起始" : ""}休息室！與挑戰者交談，或從中央門開始挑戰。`);
+  saveGame(false);
+}
+
+function restartArenaAfterDeath() {
+  state.gameOver = false;
+  state.arenaWave = 0;
+  state.arenaBossActive = false;
+  state.arenaKillsThisWave = 0;
+  state.arenaFinalBossDefeated = false;
+  state.paused = false;
+  state.attackTimer = 0;
+  state.shieldTimer = 0;
+  player.hurtTimer = 0;
+  player.actionTimer = 0;
+  player.action = "idle";
+  keys.clear();
+  enterArenaRestRoom();
+  setMessage("挑戰失敗，已回到起始休息室。裝備、金錢與最高波次已保留；與挑戰者交談或從中央門重新挑戰。");
+}
+
+function getChallengerDialogue() {
+  if (state.arenaBestWave >= 50) return "挑戰者：你做到了。從看不起你到能和你並肩，我很慶幸我們成了朋友。";
+  if (state.arenaBestWave >= 30) return "挑戰者：還有最後一段路。這次我會站在你這邊，一直等你回來。";
+  if (state.arenaBestWave >= 15) return "挑戰者：你已經是我最信任的夥伴了。下一場，我們一起面對。";
+  if (state.arenaBestWave >= 10) return "挑戰者：我以前看錯你了。要是你願意，我想和你做朋友。";
+  if (state.arenaBestWave >= 5) return "挑戰者：你真的擊敗了 Boss……下次我可以和你一起練習嗎？";
+  if (state.arenaBestWave >= 2) return "挑戰者：你比我想的能打。別誤會，我只是想看看你能走多遠。";
+  return "挑戰者：就憑你也想闖競技場？別拖累我。";
+}
+
+function arenaWaveMaxHp(combatant, wave) {
+  const base = baseCombatStats.get(combatant).maxHp;
+  const multiplier = state.playthrough === 3 ? 1.45 : state.playthrough === 2 ? 1.3 : 1;
+  return Math.ceil(base * multiplier) + Math.floor((wave - 1) / 10);
+}
+
+function getArenaWaveCombatant() {
+  if (state.arenaBossActive) {
+    return state.arenaWave === ARENA_TOTAL_WAVES
+      ? arenaFinalBoss : arenaBossPool[(state.arenaWave / 5 - 1) % arenaBossPool.length];
+  }
+  return arenaEnemyPool[(state.arenaWave + state.arenaKillsThisWave - 1) % arenaEnemyPool.length];
+}
+
+function configureArenaCombatant(combatant, wave) {
+  const base = baseCombatStats.get(combatant);
+  const stage = Math.floor((wave - 1) / 10);
+  const strength = state.playthrough === 3 ? 1.18 : state.playthrough === 2 ? 1.15 : 1;
+  const speed = state.playthrough === 3 ? 1.12 : state.playthrough === 2 ? 1.08 : 1;
+  const cooldown = state.playthrough === 3 ? 0.92 : state.playthrough === 2 ? 0.95 : 1;
+  combatant.maxHp = arenaWaveMaxHp(combatant, wave);
+  combatant.damage = Math.min(2.9, base.damage * strength + stage * 0.12);
+  combatant.speed = base.speed * speed * (1 + stage * 0.04);
+  combatant.cooldown = base.cooldown * cooldown * Math.max(0.82, 1 - stage * 0.04);
+}
+
+function spawnArenaCombatant() {
+  const combatant = getArenaWaveCombatant();
+  [...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss].forEach((item) => { item.active = false; });
+  configureArenaCombatant(combatant, state.arenaWave);
+  Object.assign(combatant, {
+    x: combatant.startX, y: combatant.startY, hp: combatant.maxHp,
+    attackCooldown: combatant.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0, active: true,
+  });
+  return combatant;
 }
 
 function spawnNextArenaWave() {
+  if (state.arenaWave >= ARENA_TOTAL_WAVES) return;
+  state.arenaRestRoom = false;
   state.arenaWave += 1;
-  state.arenaBossActive = state.arenaWave % 5 === 0;
-  const pool = state.arenaBossActive ? arenaBossPool : arenaEnemyPool;
-  const combatant = pool[(state.arenaWave - 1) % pool.length];
-  pool.forEach((item) => { item.active = false; });
-  Object.assign(combatant, { x: combatant.startX, y: combatant.startY, hp: combatant.maxHp + Math.floor(state.arenaWave / 10), attackCooldown: combatant.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0, active: true });
+  state.arenaBossActive = false;
+  state.arenaKillsThisWave = 0;
+  projectiles.length = 0;
+  const combatant = spawnArenaCombatant();
+  player.x = 120;
+  player.y = 370;
   player.hp = Math.min(player.maxHp, player.hp + 0.5);
-  setMessage(`競技場第 ${state.arenaWave} 波：${combatant.type} 出現！${state.arenaBossActive ? "Boss 波次！" : ""}`);
+  setMessage(`競技場第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：擊敗 5 名敵人。第 1 名 ${combatant.type} 出現！`);
 }
 
-function startSecondPlaythrough() {
+function advanceArenaAfterDefeat() {
+  projectiles.length = 0;
+  player.money += state.arenaBossActive ? 35 : 12;
+  if (state.arenaBossActive) {
+    state.arenaBestWave = Math.max(state.arenaBestWave, state.arenaWave);
+    if (state.arenaWave === ARENA_TOTAL_WAVES) state.arenaFinalBossDefeated = true;
+    enterArenaRestRoom();
+    if (state.arenaFinalBossDefeated) {
+      setMessage("第 50 波最終 Boss 已擊敗！你完成了競技場挑戰。與挑戰者交談，或從中央門返回正常世界。");
+    }
+    return;
+  }
+  state.arenaKillsThisWave += 1;
+  if (state.arenaKillsThisWave < ARENA_ENEMIES_PER_WAVE) {
+    const next = spawnArenaCombatant();
+    setMessage(`第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE} 名敵人已擊敗，${next.type} 出現！`);
+  } else if (state.arenaWave % 5 === 0) {
+    state.arenaBossActive = true;
+    const boss = spawnArenaCombatant();
+    setMessage(`第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波的 5 名敵人已擊敗！${boss.type} 現身！`);
+  } else {
+    state.arenaBestWave = Math.max(state.arenaBestWave, state.arenaWave);
+    spawnNextArenaWave();
+  }
+}
+
+function startPlaythrough(playthrough) {
   const carriedPlayer = { ...player, itemPurchases: { ...player.itemPurchases } };
   resetGame();
+  setEnemyDifficulty(playthrough);
   Object.assign(player, carriedPlayer, { x: 150, y: 370, hp: carriedPlayer.maxHp, action: "idle", actionTimer: 0, hurtTimer: 0, potionTimer: 0, walkCycle: 0 });
-  state.playthrough = 2;
+  state.playthrough = playthrough;
   pantsColorInput.value = player.pantsColor;
   shirtColorInput.value = player.shirtColor;
   hatInput.checked = player.hat;
   beardInput.checked = player.beard;
   glassesInput.checked = player.glasses;
   showGame();
-  setMessage("二周目開始！已保留裝備、道具與金錢，冒險進度從第一張地圖重新開始。");
+  setMessage(`${playthrough === 3 ? "三" : "二"}周目開始！敵人與 Boss 變強了。先去找老人，他會告訴你前往維度核心的真正目標。`);
   saveGame(false);
 }
 
+function startSecondPlaythrough() { startPlaythrough(2); }
+function startThirdPlaythrough() {
+  setEnemyDifficulty(3);
+  state.playthrough = 3;
+  enterArenaMode();
+  setMessage("三周目競技場開始！敵人與 Boss 再次變強，每擊敗 5 波即可進入休息室。");
+  saveGame(false);
+}
+
+function jumpToThirdPlaythroughGate() {
+  if (state.playthrough !== 2 || !state.authorBossDefeated || !state.worldReturned) {
+    startSecondPlaythrough();
+    state.trueFinalBossDefeated = true;
+    state.authorRevealed = true;
+    state.authorBossDefeated = true;
+    state.trueFinalExitEntered = true;
+    state.worldReturned = true;
+  }
+  if (!state.arenaMode) enterArenaMode();
+  state.arenaWave = 0;
+  state.arenaBossActive = false;
+  state.arenaKillsThisWave = 0;
+  state.arenaFinalBossDefeated = false;
+  enterArenaRestRoom();
+  state.gameOver = false;
+  player.hp = player.maxHp;
+  player.x = thirdPlaythroughGate.x - 40;
+  player.y = thirdPlaythroughGate.y;
+  setMessage("密技成功！已抵達競技場休息室中央的三周目之門，按 F 進入三周目。");
+  saveGame(false);
+}
+
+function getElderLessons() {
+  return state.playthrough >= 2 ? [
+    "",
+    "這次世界仍不穩定，真正的出口藏在維度核心。",
+    "穿越十一張地圖，前往真・最終地圖「維度核心」。",
+    "真・最終 Boss「維度之源」守在那裡，敵人也比上次更強。",
+    "擊敗維度之源後穿過回歸之門，才能回到正常世界。出發吧！",
+  ] : [
+    "",
+    "先學會這個世界的規則吧。",
+    "A / D 可以左右移動，滑鼠左鍵可以使用劍。",
+    "按 E 舉盾 0.3 秒，擋下攻擊會反震並暈眩敵人。",
+    "按 C 進入 2D 維度，使用 W / A / S / D 探索。",
+  ];
+}
+
 function interact() {
+  if (gameContent.hidden || state.gameOver || state.paused) return;
+  if (state.arenaMode) {
+    if (state.arenaRestRoom && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
+      setMessage(getChallengerDialogue());
+    } else if (state.arenaRestRoom && state.arenaFinalBossDefeated
+      && Math.hypot(player.x - arenaContinueGate.x, player.y - arenaContinueGate.y) < 85) {
+      exitArenaMode();
+    } else if (state.arenaRestRoom && state.playthrough === 2 && state.authorBossDefeated
+      && Math.hypot(player.x - thirdPlaythroughGate.x, player.y - thirdPlaythroughGate.y) < 85) {
+      startThirdPlaythrough();
+    } else if (state.arenaRestRoom && !(state.playthrough === 2 && state.authorBossDefeated)
+      && Math.hypot(player.x - arenaContinueGate.x, player.y - arenaContinueGate.y) < 85) {
+      spawnNextArenaWave();
+    } else if (state.arenaRestRoom) {
+      setMessage(state.arenaFinalBossDefeated
+        ? "挑戰已完成。與挑戰者交談，或前往中央門按 F 返回正常世界。"
+        : state.playthrough === 2 && state.authorBossDefeated
+        ? "與左側挑戰者對話，或前往中央三周目之門按 F。"
+        : "與左側挑戰者對話，或前往中央門按 F 開始挑戰。");
+    } else {
+      setMessage("擊敗每第 5 波的 Boss 後即可進入休息室。");
+    }
+    return;
+  }
   if (state.worldReturned && !state.arenaMode) {
-    enterArenaMode();
+    if (state.playthrough === 1) startSecondPlaythrough();
+    else enterArenaMode();
+    return;
+  }
+  if (state.trueFinalMap) {
+    if (!state.trueFinalBossDefeated) {
+      setMessage("先擊敗維度核心的真・最終 Boss「維度之源」，解鎖回歸之門。");
+    } else if (Math.hypot(player.x - trueFinalExit.x, player.y - trueFinalExit.y) < 85) {
+      if (!state.authorRevealed) {
+        revealAuthorBoss();
+      } else if (!state.authorBossDefeated) {
+        setMessage("作者鎖住了回歸之門。先躲開彈幕並擊敗他！");
+      } else {
+        state.trueFinalMap = false;
+        state.trueFinalExitEntered = true;
+        state.worldReturned = true;
+        state.authorIntroTimer = 0;
+        projectiles.length = 0;
+        keys.clear();
+        setMessage("你擊敗了作者並穿過回歸之門，終於回到正常世界！");
+      }
+    } else {
+      setMessage(returnDoorUnlocked()
+        ? "回歸之門已開啟，靠近門後按 F。"
+        : "作者鎖住了回歸之門，先擊敗他！");
+    }
     return;
   }
   const extra = currentExtraMap();
@@ -1014,16 +1497,13 @@ function interact() {
     if (extra.exit.unlocked && Math.hypot(player.x - extra.exit.x, player.y - extra.exit.y) < 85) {
       if (state.extraMap < extraMaps.length) {
         enterExtraMap(state.extraMap + 1);
+      } else if (state.playthrough >= 2) {
+        enterTrueFinalMap();
       } else {
-        state.extraMap = 0;
-        state.worldReturned = true;
-        projectiles.length = 0;
-        extra.enemy.active = false;
-        extra.boss.active = false;
-        setMessage("六張新地圖全部完成！你成為真正的維度旅者！");
+        startSecondPlaythrough();
       }
     } else if (!extra.exit.unlocked) {
-      setMessage(state.extraEnemyDefeated ? `${extra.title}出口鎖定中，${extra.puzzle}。` : `先擊敗${extra.enemy.type}與${extra.boss.type}。`);
+      setMessage(extra.boss.hp > 0 ? `先擊敗${state.extraEnemyDefeated ? extra.boss.type : extra.enemy.type}。` : `${extra.title}出口鎖定中，${extra.puzzle}。`);
     } else {
       setMessage("靠近新地圖出口後按 F。");
     }
@@ -1142,24 +1622,19 @@ function interact() {
     state.dialog = true;
     state.elderTalked = true;
     state.tutorialStep = 1;
-    setMessage("老人：先學會這個世界的規則吧。按 F 繼續。");
+    setMessage(`老人：${getElderLessons()[1]}按 F 繼續。`);
     return;
   }
   if (state.dialog && state.tutorialStep < 4) {
     state.tutorialStep += 1;
-    const lessons = [
-      "",
-      "老人：先學會這個世界的規則吧。按 F 繼續。",
-      "老人：A / D 可以左右移動，滑鼠左鍵可以使用劍。按 F 繼續。",
-      "老人：按 E 可以舉盾 0.3 秒，擋下攻擊會反震並暈眩敵人。按 F 繼續。",
-      "老人：按 C 進入 2D 維度，使用 W / A / S / D 探索。盾牌已經備妥！",
-    ];
-    setMessage(lessons[state.tutorialStep]);
+    setMessage(`老人：${getElderLessons()[state.tutorialStep]}${state.tutorialStep < 4 ? "按 F 繼續。" : ""}`);
     if (state.tutorialStep === 4) {
       state.hasShield = true;
       enemies[0].active = true;
       state.dialog = false;
-      setMessage("你取得盾牌，劍也仍然保留。第一個敵人出現了！");
+      setMessage(state.playthrough >= 2
+        ? "老人：擊敗維度之源並穿過回歸之門。第一個強化敵人出現了！"
+        : "你取得盾牌，劍也仍然保留。第一個敵人出現了！");
     }
     return;
   }
@@ -1169,7 +1644,9 @@ function interact() {
     state.dialog = false;
     setMessage("你取得盾牌，劍也仍然保留。第一個敵人出現了！");
   } else {
-    setMessage("老人：熟練切換維度，才能找回正常世界。");
+    setMessage(state.playthrough >= 2
+      ? "老人：前往維度核心，擊敗維度之源後穿過回歸之門，才能回到正常世界。"
+      : "老人：熟練切換維度，才能找回正常世界。");
   }
 }
 
@@ -1204,13 +1681,16 @@ function attackOrParry() {
   if (player.weaponType !== "sword") {
     const target = getCombatants().filter((enemy) => enemy.active && enemy.hp > 0)
       .sort((a, b) => distanceToEnemy(a) - distanceToEnemy(b))[0];
-    const aimDirection = target && Math.sign(target.x - player.x) !== 0 ? Math.sign(target.x - player.x) : player.facing;
+    const targetDx = target ? target.x - player.x : player.facing;
+    const targetDy = target && state.dimension === "2D" ? target.y - player.y : 0;
+    const aimLength = Math.hypot(targetDx, targetDy) || 1;
+    const projectileSpeed = player.weaponType === "staff" ? 5.8 : 6.8;
     projectiles.push({
       owner: "player",
-      x: player.x + aimDirection * 20,
+      x: player.x + (targetDx / aimLength) * 20,
       y: player.y,
-      vx: aimDirection * (player.weaponType === "staff" ? 5.8 : 6.8),
-      vy: 0,
+      vx: (targetDx / aimLength) * projectileSpeed,
+      vy: (targetDy / aimLength) * projectileSpeed,
       damage: player.weaponLevel * (player.weaponType === "staff" ? 1.5 : 1.2) * (state.powerTimer > 0 ? 2 : 1),
       color: player.weaponType === "staff" ? "#b58cff" : "#d8fff8",
       radius: player.weaponType === "staff" ? 10 : 6,
@@ -1250,7 +1730,10 @@ function distanceToEnemy(enemy) {
 }
 
 function getCombatants() {
-  if (state.arenaMode) return state.arenaBossActive ? arenaBossPool : arenaEnemyPool;
+  if (state.arenaMode) return state.arenaRestRoom ? [] : state.arenaBossActive
+    ? state.arenaWave === ARENA_TOTAL_WAVES ? [arenaFinalBoss] : arenaBossPool
+    : arenaEnemyPool;
+  if (state.trueFinalMap) return [state.authorRevealed ? authorBoss : trueFinalBoss];
   const extra = currentExtraMap();
   if (extra) return [extra.enemy, extra.boss];
   if (state.voidMap) return [voidBoss];
@@ -1309,10 +1792,10 @@ function useSpecialItem(item) {
   } else if (item === "compass") {
     if (player.compasses <= 0) { setMessage("你沒有解謎羅盤，先到商人處購買。"); return; }
     const map = currentExtraMap();
-    const nextExtra = map?.puzzleNodes.find((node) => !node.collected);
-    const nextRuin = ruinRunes.find((rune) => !rune.collected);
-    const nextFrost = frostSeals.find((seal) => !seal.collected);
-    const target = nextExtra || nextRuin || nextFrost;
+    const target = map ? map.puzzleNodes.find((node) => !node.collected)
+      : state.nextMap ? ruinRunes.find((rune) => !rune.collected)
+      : state.frostMap ? frostSeals.find((seal) => !seal.collected)
+      : null;
     if (!target) { setMessage("羅盤沒有偵測到未完成的解謎目標。"); return; }
     player.compasses -= 1;
     emitParticles(target.x, target.y, "#79d3c9", 20, 2.4);
@@ -1349,11 +1832,44 @@ function attackFacesEnemy(enemy) {
   return horizontalDirection === 0 || horizontalDirection === player.facing;
 }
 
+function fireAuthorPattern(enemy) {
+  const damage = enemy.damage * 0.4;
+  const fire = (x, y, vx, vy, color, radius = 8) => {
+    projectiles.push({ x, y, vx, vy, damage, color, radius, source: enemy });
+  };
+  if (enemy.attackPattern === "fan" || enemy.attackPattern === "flip") {
+    const angle = Math.atan2(enemy.attackTargetY - enemy.y, enemy.attackTargetX - enemy.x);
+    const spread = enemy.attackPattern === "flip" ? [-1, 0, 1] : [-2, -1, 0, 1, 2];
+    spread.forEach((offset) => {
+      const direction = angle + offset * 0.2;
+      fire(enemy.x, enemy.y, Math.cos(direction) * 5.3, Math.sin(direction) * 5.3, "#ffd28a");
+    });
+    if (enemy.attackPattern === "flip") {
+      state.screenFlipTimer = 4;
+      setMessage("作者改寫了畫面方向！螢幕翻轉 4 秒，閃避迎面而來的彈幕。");
+    } else {
+      setMessage("作者放出扇形彈幕！從彈幕間隙閃避。");
+    }
+  } else if (enemy.attackPattern === "lanes") {
+    const fromRight = Math.floor(enemy.patternIndex / 4) % 2 === 0;
+    [125, 185, 245, 305, 365, 425].forEach((y, index) => {
+      if (index !== enemy.safeLane) fire(fromRight ? W - 18 : 18, y, fromRight ? -5.8 : 5.8, 0, "#f495d8", 9);
+    });
+    setMessage("作者發射橫向彈幕！沿著沒有預警線的通道閃避。");
+  } else {
+    for (let index = 0; index < 12; index += 1) {
+      const angle = (index / 12) * Math.PI * 2 + enemy.patternIndex * 0.16;
+      fire(enemy.x, enemy.y, Math.cos(angle) * 4.2, Math.sin(angle) * 4.2, "#aee9ff", 7);
+    }
+    setMessage("作者放出環形彈幕！尋找外圈空隙移動。");
+  }
+}
+
 function updateEnemy(enemy, dt) {
   if (!enemy.active || enemy.hp <= 0) return;
   const attackType = enemy.attackType || "melee";
   const attackDamage = enemy.damage || 1;
-  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss) && enemy.hp <= enemy.maxHp / 2;
+  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss || enemy === trueFinalBoss || enemy === authorBoss || enemy === arenaFinalBoss) && enemy.hp <= enemy.maxHp / 2;
   const cooldown = enraged ? enemy.cooldown * 0.65 : enemy.cooldown;
   enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
   enemy.stunned = Math.max(0, enemy.stunned - dt);
@@ -1362,7 +1878,7 @@ function updateEnemy(enemy, dt) {
   const dy = state.dimension === "2D" ? player.y - enemy.y : 0;
   const distance = Math.hypot(dx, dy);
   const movement = Math.sign(dx);
-  if (enemy.attackWindup <= 0 && distance > (["ranged", "shockwave", "void"].includes(attackType) ? 185 : 64)) {
+  if (enemy.attackWindup <= 0 && distance > (["ranged", "shockwave", "void", "author"].includes(attackType) ? 185 : 64)) {
     enemy.x += movement * enemy.speed * 60 * dt;
     if (state.dimension === "2D") {
       const verticalSpeed = enemy.type === "跳躍者" ? enemy.speed * 2.2 : enemy.speed;
@@ -1373,7 +1889,9 @@ function updateEnemy(enemy, dt) {
   if (enemy.attackWindup > 0) {
     enemy.attackWindup -= dt;
     if (enemy.attackWindup <= 0) {
-      if (attackType === "ranged") {
+      if (attackType === "author") {
+        fireAuthorPattern(enemy);
+      } else if (attackType === "ranged") {
         projectiles.push({ x: enemy.x, y: enemy.y, vx: Math.sign(player.x - enemy.x) * 4.5, vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 2 : 0, damage: attackDamage, color: enemy.color, source: enemy });
         setMessage(`${enemy.type} 發射了遠程攻擊！`);
       } else if (attackType === "shockwave") {
@@ -1408,7 +1926,7 @@ function updateEnemy(enemy, dt) {
         emitParticles(enemy.x, enemy.y, "#a77cff", 22, 3.1);
         screenShake = 0.24;
         playSound(95, 0.25, "sawtooth");
-        setMessage("虛空君王撕裂空間，釋放三重虛空彈！");
+        setMessage(`${enemy.type} 撕裂空間，釋放三重虛空彈！`);
       } else {
         if (attackType === "dash") {
           enemy.x = enemy.attackTargetX ?? player.x;
@@ -1448,7 +1966,9 @@ function updateEnemy(enemy, dt) {
             keys.clear();
             state.attackTimer = 0;
             state.shieldTimer = 0;
-            setMessage("HP 歸零，遊戲結束。按 X 或下方重新開始。 ");
+            setMessage(state.arenaMode
+              ? "競技場挑戰結束，按 X 或下方按鈕返回正常世界。"
+              : "HP 歸零，遊戲結束。按 X 或下方按鈕重新開始。");
           } else {
             setMessage(`${enemy.type} 擊中你！`);
           }
@@ -1464,6 +1984,7 @@ function updateEnemy(enemy, dt) {
     }
   } else if (distance < enemy.range && enemy.attackCooldown <= 0) {
     enemy.attackWindup = attackType === "dash" ? 0.28
+      : attackType === "author" ? 0.9
       : attackType === "smash" ? 0.9
       : attackType === "leap" ? 0.65
       : attackType === "ranged" ? 0.75
@@ -1473,6 +1994,12 @@ function updateEnemy(enemy, dt) {
       : 0.55;
     enemy.attackTargetX = player.x;
     enemy.attackTargetY = player.y;
+    if (attackType === "author") {
+      const patterns = ["fan", "lanes", "ring", "flip"];
+      enemy.attackPattern = patterns[(enemy.patternIndex || 0) % patterns.length];
+      enemy.patternIndex = (enemy.patternIndex || 0) + 1;
+      enemy.safeLane = Math.floor(Math.random() * 6);
+    }
     if (enraged) enemy.attackWindup *= 0.8;
   }
   enemy.x = Math.max(55, Math.min(W - 55, enemy.x));
@@ -1497,6 +2024,10 @@ function updateProjectiles(dt) {
       continue;
     }
     if (Math.hypot(player.x - projectile.x, player.y - projectile.y) < 24) {
+      if (player.hurtTimer > 0) {
+        projectiles.splice(index, 1);
+        continue;
+      }
       const incomingDirection = projectile.vx < 0 ? 1 : -1;
       if (!(isShieldActive() && player.facing === incomingDirection)) {
         player.hp = Math.max(0, player.hp - (player.armor ? projectile.damage * 0.5 : projectile.damage));
@@ -1505,7 +2036,9 @@ function updateProjectiles(dt) {
         player.actionTimer = 0.35;
         emitParticles(player.x, player.y, "#ff6b6b", 12, 2.8);
         emitFloatingText(`-${projectile.damage}`, player.x, player.y - 28, "#ff6b6b");
-        setMessage(player.hp > 0 ? "遠程攻擊命中你！" : "HP 歸零，遊戲結束。按 X 或下方重新開始。 ");
+        setMessage(player.hp > 0 ? "遠程攻擊命中你！" : state.arenaMode
+          ? "競技場挑戰結束，按 X 或下方按鈕返回正常世界。"
+          : "HP 歸零，遊戲結束。按 X 或下方按鈕重新開始。");
         if (player.hp <= 0) {
           state.gameOver = true;
           keys.clear();
@@ -1567,7 +2100,7 @@ function activateNextFrostEnemy() {
 }
 
 function update(dt) {
-  if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.paused) return;
+  if (gameContent.hidden || state.gameOver || (state.worldReturned && !state.arenaMode) || state.paused) return;
   const horizontal = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
   const vertical = state.dimension === "2D"
     ? (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0)
@@ -1596,6 +2129,8 @@ function update(dt) {
   state.shieldTimer = Math.max(0, state.shieldTimer - dt);
   state.shieldCooldown = Math.max(0, state.shieldCooldown - dt);
   state.powerTimer = Math.max(0, state.powerTimer - dt);
+  state.authorIntroTimer = Math.max(0, state.authorIntroTimer - dt);
+  state.screenFlipTimer = Math.max(0, state.screenFlipTimer - dt);
   screenShake = Math.max(0, screenShake - dt);
   if (state.bossRestTimer > 0) {
     state.bossRestTimer = Math.max(0, state.bossRestTimer - dt);
@@ -1607,7 +2142,8 @@ function update(dt) {
     }
   }
   const extra = currentExtraMap();
-  const activeEnemy = state.arenaMode ? getCombatants().find((combatant) => combatant.active && combatant.hp > 0)
+  const activeEnemy = state.arenaMode ? getCombatants().find((combatant) => combatant.active)
+    : state.trueFinalMap ? (state.authorRevealed ? authorBoss : trueFinalBoss)
     : extra ? (state.extraEnemyDefeated ? extra.boss : extra.enemy)
     : state.voidMap ? voidBoss
     : state.frostMap ? frostEnemies[state.frostDefeated]
@@ -1617,11 +2153,22 @@ function update(dt) {
     ? bosses[state.defeatedBosses]
     : !state.bossPhase ? enemies[state.defeatedEnemies] : null;
   if (activeEnemy) {
-    updateEnemy(activeEnemy, dt);
+    if (activeEnemy !== authorBoss || state.authorIntroTimer === 0) updateEnemy(activeEnemy, dt);
     if (state.arenaMode && activeEnemy.hp <= 0 && activeEnemy.active) {
       activeEnemy.active = false;
-      player.money += state.arenaBossActive ? 35 : 12;
-      spawnNextArenaWave();
+      advanceArenaAfterDefeat();
+    } else if (state.trueFinalMap && trueFinalBoss.hp <= 0 && trueFinalBoss.active) {
+      trueFinalBoss.active = false;
+      state.trueFinalBossDefeated = true;
+      projectiles.length = 0;
+      setMessage("維度之源已被擊敗！回歸之門已開啟，前往右側門扉按 F。");
+    } else if (state.trueFinalMap && state.authorRevealed && authorBoss.hp <= 0 && authorBoss.active) {
+      authorBoss.active = false;
+      state.authorBossDefeated = true;
+      state.authorIntroTimer = 0;
+      state.screenFlipTimer = 0;
+      projectiles.length = 0;
+      setMessage("作者已被擊敗！回歸之門重新開啟，前往右側按 F 回到正常世界。");
     } else if (extra && !state.extraEnemyDefeated && extra.enemy.hp <= 0 && extra.enemy.active) {
       extra.enemy.active = false;
       state.extraEnemyDefeated = true;
@@ -1654,7 +2201,15 @@ function update(dt) {
     } else if (state.bossPhase) activateNextBoss();
     else activateNextEnemy();
   }
+  if (state.gameOver) {
+    if (state.arenaMode) restartArenaAfterDeath();
+    return;
+  }
   updateProjectiles(dt);
+  if (state.gameOver) {
+    if (state.arenaMode) restartArenaAfterDeath();
+    return;
+  }
   updateParticles(dt);
   updateFloatingTexts(dt);
   state.regenTimer -= dt;
@@ -1669,8 +2224,8 @@ function update(dt) {
     state.modeTimer = Math.max(0, state.modeTimer - dt);
     if (state.modeTimer === 0) {
       state.dimension = "1D";
-      state.cooldown = 20;
-      setMessage("2D 維度結束，回到 1D。C 冷卻中，還需 20 秒。");
+      state.cooldown = DIMENSION_COOLDOWN;
+      setMessage(`2D 維度結束，回到 1D。C 冷卻中，還需 ${DIMENSION_COOLDOWN} 秒。`);
     }
   } else if (state.cooldown > 0) {
     state.cooldown = Math.max(0, state.cooldown - dt);
@@ -1803,16 +2358,65 @@ function drawBackground() {
   const twoD = state.dimension === "2D";
   drawAmbientBackdrop();
   if (state.arenaMode) {
+    if (state.arenaRestRoom) {
+      drawText("競技場休息室", 24, 105, 16, "#b8ffe1");
+      drawText(state.arenaFinalBossDefeated ? "50 波完成・最終 Boss 已擊敗"
+        : state.arenaWave === 0 ? "挑戰起點・生命已恢復" : `第 ${state.arenaWave} 波完成・生命已恢復`, 24, 130, 13, "#d7f5e5");
+      ctx.fillStyle = "#183b36";
+      ctx.fillRect(0, 382, W, 8);
+      ctx.fillStyle = "#254d45";
+      ctx.fillRect(305, 175, 350, 42);
+      ctx.fillRect(325, 217, 32, 165);
+      ctx.fillRect(603, 217, 32, 165);
+      if (state.arenaFinalBossDefeated) {
+        drawPortal(arenaContinueGate.x, arenaContinueGate.y, true, "#ffd28a");
+        drawText("完成挑戰・按 F", arenaContinueGate.x, arenaContinueGate.y + 58, 12, "#ffedbd", "center");
+      } else if (state.playthrough === 2 && state.authorBossDefeated) {
+        drawPortal(thirdPlaythroughGate.x, thirdPlaythroughGate.y, true, "#8ce0b0");
+        drawText("三周目之門・按 F", thirdPlaythroughGate.x, thirdPlaythroughGate.y + 58, 12, "#b8ffe1", "center");
+      } else {
+        drawPortal(arenaContinueGate.x, arenaContinueGate.y, true, "#79d3c9");
+        drawText("繼續挑戰・按 F", arenaContinueGate.x, arenaContinueGate.y + 58, 12, "#b8fff5", "center");
+      }
+      return;
+    }
     drawText("競技場模式", 24, 105, 16, "#ff7188");
-    drawText(`第 ${state.arenaWave} 波${state.arenaBossActive ? "・Boss" : ""}：擊敗敵人直到 HP 歸零`, 24, 130, 13, "#ffd6dc");
+    drawText(`第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：${state.arenaBossActive ? "Boss 戰" : `敵人 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`}`, 24, 130, 13, "#ffd6dc");
     ctx.fillStyle = "#8e304d99";
     ctx.fillRect(0, 382, W, 6);
+    return;
+  }
+  if (state.trueFinalMap) {
+    drawText("真・最終地圖：維度核心", 24, 105, 16, "#f9a6eb");
+    const chapter = !state.trueFinalBossDefeated ? "擊敗維度之源，解鎖回歸之門"
+      : !state.authorRevealed ? "回歸之門已開啟，前往右側按 F"
+      : !state.authorBossDefeated ? "作者鎖上了門！在 2D 場地中閃避彈幕"
+      : "作者已被擊敗，前往回歸之門按 F";
+    drawText(chapter, 24, 130, 13, "#f7d7f3");
+    drawGlow(W / 2, 255, 110, "#e461d8", 0.42);
+    ctx.strokeStyle = "#f9a6eb";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(W / 2, 255, 54, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(W / 2, 255, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#9b3f9b";
+    ctx.fillRect(0, 382, W, 6);
+    if (state.authorRevealed && !state.authorBossDefeated) {
+      ctx.strokeStyle = "#ffd28a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(55, 95, W - 110, H - 185);
+    }
+    drawPortal(trueFinalExit.x, trueFinalExit.y, returnDoorUnlocked(), "#f9a6eb");
+    drawText(returnDoorUnlocked() ? "回歸之門" : "封印之門", trueFinalExit.x, trueFinalExit.y + 58, 12, returnDoorUnlocked() ? "#ffd5f6" : "#a8acc2", "center");
     return;
   }
   const extra = currentExtraMap();
   if (extra) {
     drawText(`第${extra.index + 5}張地圖：${extra.title}`, 24, 105, 14, extra.color);
-    drawText(state.extraEnemyDefeated ? `${extra.puzzle}（${state.extraPuzzleCount} / ${extra.nodes}）` : `擊敗 ${extra.enemy.type} 與 ${extra.boss.type}`, 24, 130, 13, "#d7e6e8");
+    drawText(!state.extraEnemyDefeated ? `擊敗 ${extra.enemy.type}` : extra.boss.hp > 0 ? `擊敗 ${extra.boss.type}` : `${extra.puzzle}（${state.extraPuzzleCount} / ${extra.nodes}）`, 24, 130, 13, "#d7e6e8");
     if (twoD) {
       ctx.strokeStyle = `${extra.color}55`;
       ctx.lineWidth = 1;
@@ -2018,6 +2622,7 @@ function drawCharacter() {
 }
 
 function drawElder() {
+  if (state.authorRevealed) return;
   ctx.fillStyle = "#07091266";
   ctx.beginPath(); ctx.ellipse(elder.x, elder.y + 20, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#6f4d43";
@@ -2039,7 +2644,7 @@ function drawElder() {
 function drawEnemy() {
   getCombatants().forEach((enemy) => {
     if (!enemy.active || enemy.hp <= 0) return;
-  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss) && enemy.hp <= enemy.maxHp / 2;
+  const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss || enemy === trueFinalBoss || enemy === authorBoss || enemy === arenaFinalBoss) && enemy.hp <= enemy.maxHp / 2;
   if (enemy.attackWindup > 0) {
     ctx.save();
     const warningColor = {
@@ -2048,13 +2653,27 @@ function drawEnemy() {
       dash: "#78c7ff",
       dimension: "#f1d76f",
       void: "#b58cff",
+      author: "#ffd28a",
       ranged: "#e7d35f",
       leap: "#8ce0b0",
     }[enemy.attackType] || "#ff9b9f";
     ctx.strokeStyle = warningColor;
     ctx.lineWidth = 3;
     ctx.setLineDash([8, 6]);
-    if (enemy.attackType === "shockwave") {
+    if (enemy === authorBoss) {
+      if (enemy.attackPattern === "lanes") {
+        [125, 185, 245, 305, 365, 425].forEach((y, index) => {
+          if (index === enemy.safeLane) return;
+          ctx.beginPath(); ctx.moveTo(55, y); ctx.lineTo(W - 55, y); ctx.stroke();
+        });
+      } else if (enemy.attackPattern === "ring") {
+        ctx.beginPath(); ctx.arc(enemy.x, enemy.y, 110, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.moveTo(enemy.x, enemy.y);
+        ctx.lineTo(enemy.attackTargetX ?? player.x, enemy.attackTargetY ?? player.y);
+        ctx.stroke();
+      }
+    } else if (enemy.attackType === "shockwave") {
       ctx.beginPath();
       ctx.moveTo(18, enemy.y);
       ctx.lineTo(W - 18, enemy.y);
@@ -2108,6 +2727,13 @@ function drawEnemy() {
   ctx.fillRect(5, -6, 5, 5);
   ctx.fillStyle = "#2b1720";
   ctx.fillRect(-7, 6, 14, 4);
+  if (enemy === authorBoss) {
+    ctx.fillStyle = "#eee4d2";
+    ctx.fillRect(-25, -enemy.size / 2 - 10, 50, 14);
+    ctx.fillRect(-17, 3, 34, 20);
+    ctx.fillStyle = "#6f4d43";
+    ctx.fillRect(-enemy.size / 2 + 5, enemy.size / 2 - 13, enemy.size - 10, 10);
+  }
   if (frostEnemies.includes(enemy)) {
     ctx.fillStyle = "#d9f8ff";
     ctx.beginPath();
@@ -2119,8 +2745,8 @@ function drawEnemy() {
     ctx.lineTo(enemy.size / 2 - 3, -enemy.size / 2);
     ctx.fill();
   }
-  if (enemy === voidBoss) {
-    ctx.fillStyle = "#d9c8ff";
+  if (enemy === voidBoss || enemy === trueFinalBoss) {
+    ctx.fillStyle = enemy === trueFinalBoss ? "#ffd5f6" : "#d9c8ff";
     ctx.beginPath();
     ctx.moveTo(-24, -enemy.size / 2);
     ctx.lineTo(-16, -enemy.size / 2 - 22);
@@ -2141,11 +2767,13 @@ function drawEnemy() {
     shockwave: "裂地震波！",
     dimension: "維度突襲！",
     void: "虛空裂變！",
+    author: ({ fan: "扇形彈幕！", lanes: "橫向彈幕！", ring: "環形彈幕！", flip: "畫面翻轉！" })[enemy.attackPattern] || "作者攻擊！",
   }[enemy.attackType];
   const warningText = `${attackLabel || "攻擊！"} ${enemy.attackWindup.toFixed(1)}秒`;
   drawText(enemy.attackWindup > 0 ? warningText : `${enemy.type} HP ${enemy.hp}`, enemy.x, enemy.y - enemy.size / 2 - 8, 12, enemy.attackWindup > 0 ? "#ffdd9b" : "#d99aac", "center");
   if (enemy.attackWindup > 0) {
     const maxWindup = enemy.attackType === "shockwave" ? 1.05
+      : enemy.attackType === "author" ? 0.9
       : enemy.attackType === "smash" ? 0.9
       : enemy.attackType === "leap" ? 0.65
       : enemy.attackType === "ranged" ? 0.75
@@ -2280,7 +2908,26 @@ function drawShards() {
 }
 
 function getCurrentObjective() {
+  if (state.arenaRestRoom && state.arenaFinalBossDefeated) return "競技場完成：與挑戰者對話或從中央門返回";
+  if (state.arenaRestRoom) return state.playthrough === 2 && state.authorBossDefeated
+    ? "休息室：與挑戰者交談，中央門進入三周目"
+    : "休息室：與挑戰者交談，中央門開始挑戰";
+  if (state.arenaMode) return state.arenaBossActive
+    ? `競技場第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：擊敗 Boss`
+    : `競技場第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：敵人 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`;
+  if (state.trueFinalMap) {
+    if (!state.trueFinalBossDefeated) return "擊敗維度之源";
+    if (!state.authorRevealed) return "前往回歸之門並按 F";
+    return state.authorBossDefeated ? "再次前往回歸之門並按 F" : "擊敗真・最終 Boss：作者";
+  }
   if (state.worldReturned) return "冒險完成：你已回到正常世界";
+  const extra = currentExtraMap();
+  if (extra) {
+    if (!state.extraEnemyDefeated) return `擊敗 ${extra.enemy.type}`;
+    if (extra.boss.hp > 0) return `擊敗 ${extra.boss.type}`;
+    if (!extra.exit.unlocked) return `${extra.puzzle}（${state.extraPuzzleCount} / ${extra.nodes}）`;
+    return "前往出口並按 F";
+  }
   if (state.voidMap) {
     return state.voidBossDefeated ? "前往最終出口並按 F" : "擊敗 Boss：虛空君王";
   }
@@ -2330,8 +2977,9 @@ function drawHud() {
   ctx.fillStyle = state.dimension === "2D" ? "#79d3c9" : "#59618d";
   ctx.fillRect(0, 72, W, 2);
   drawText(`維度：${state.dimension}`, 24, 30, 18, state.dimension === "2D" ? "#79d3c9" : "#c3c8ed");
-  const mapLabel = state.arenaMode ? "競技場" : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
-  drawText(`${mapLabel}${state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
+  const extra = currentExtraMap();
+  const mapLabel = state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
+  drawText(`${mapLabel}${state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
   const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
   const swordStatus = state.swordCooldown > 0 ? `${state.swordCooldown.toFixed(1)}s` : "可用";
@@ -2361,7 +3009,11 @@ function drawHud() {
   if (state.comboCount > 0) {
     drawText(`連擊：${state.comboCount}（傷害 x${(1 + (state.comboCount - 1) * 0.25).toFixed(2)}）`, 390, 52, 13, "#f4d18d");
   }
-  const progress = state.voidMap
+  const progress = state.arenaRestRoom ? (state.arenaFinalBossDefeated ? "50 波完成" : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
+    : state.arenaMode ? (state.arenaBossActive ? `第 ${state.arenaWave} 波 Boss` : `第 ${state.arenaWave} 波 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`)
+    : state.trueFinalMap ? (!state.trueFinalBossDefeated ? "維度之源" : state.authorRevealed && !state.authorBossDefeated ? "作者" : "回歸之門")
+    : extra ? (!state.extraEnemyDefeated ? extra.enemy.type : extra.boss.hp > 0 ? extra.boss.type : extra.puzzle)
+    : state.voidMap
     ? "最終 Boss"
     : state.frostMap
       ? `裂谷敵人 ${Math.min(state.frostDefeated + 1, frostEnemies.length)} / ${frostEnemies.length}`
@@ -2377,7 +3029,7 @@ function drawHud() {
   const target = getCombatants().find((combatant) => combatant.active && combatant.hp > 0);
   if (target) {
     drawText(target.type, W / 2, 105, 16, "#f4f0df", "center");
-    const targetEnraged = (state.bossPhase && bosses.includes(target) || target === voidBoss) && target.hp <= target.maxHp / 2;
+    const targetEnraged = (state.bossPhase && bosses.includes(target) || target === voidBoss || target === trueFinalBoss || target === authorBoss || target === arenaFinalBoss) && target.hp <= target.maxHp / 2;
     if (targetEnraged) {
       drawText("狂暴狀態：攻擊速度提升！", W / 2, 180, 13, "#ff7b83", "center");
     }
@@ -2387,6 +3039,7 @@ function drawHud() {
       smash: "熔岩重擊",
       dimension: "維度突襲",
       void: "虛空裂變",
+      author: "彈幕・畫面翻轉",
     }[target.attackType];
     if (attackStyle) {
       drawText(`攻擊模式：${attackStyle}`, W / 2, 162, 12, "#f4d18d", "center");
@@ -2408,13 +3061,7 @@ function drawHud() {
 
 function drawTutorial() {
   if (!state.dialog) return;
-  const lessons = [
-    "",
-    "先學會這個世界的規則吧。按 F 繼續。",
-    "A / D 可以左右移動，滑鼠左鍵可以使用劍。",
-    "按 E 舉盾 0.3 秒，擋住攻擊會擊退並暈眩敵人。",
-    "按 C 進入 2D 維度，使用 W / A / S / D 探索。",
-  ];
+  const lessons = getElderLessons();
   ctx.fillStyle = "#0c0e18ee";
   ctx.fillRect(150, 390, 660, 92);
   ctx.strokeStyle = "#75603d";
@@ -2443,14 +3090,34 @@ function drawMerchant() {
   drawText("商人", merchant.x, merchant.y - 56, 14, "#f4d18d", "center");
 }
 
+function drawChallenger() {
+  if (!state.arenaRestRoom) return;
+  ctx.fillStyle = "#07091266";
+  ctx.beginPath(); ctx.ellipse(challenger.x, challenger.y + 20, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#345b84";
+  ctx.fillRect(challenger.x - 18, challenger.y - 28, 36, 50);
+  ctx.fillStyle = "#5e92bd";
+  ctx.fillRect(challenger.x - 14, challenger.y - 23, 28, 39);
+  ctx.fillStyle = "#e3ad82";
+  ctx.beginPath(); ctx.arc(challenger.x, challenger.y - 34, 17, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#263957";
+  ctx.fillRect(challenger.x - 18, challenger.y - 49, 36, 12);
+  drawText("挑戰者・按 F", challenger.x, challenger.y - 59, 14, "#b9e5ff", "center");
+}
+
 function draw() {
   ctx.save();
+  if (state.trueFinalMap && state.authorRevealed && !state.authorBossDefeated && state.screenFlipTimer > 0) {
+    ctx.translate(W, H);
+    ctx.rotate(Math.PI);
+  }
   if (screenShake > 0) {
     ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
   }
   drawBackground();
   drawShards();
   drawElder();
+  drawChallenger();
   drawEnemy();
   drawProjectiles();
   drawParticles();
@@ -2470,11 +3137,23 @@ function draw() {
     drawText("按 P 繼續冒險", W / 2, H / 2 + 28, 17, "#f4f0df", "center");
   }
   ctx.restore();
+  if (state.trueFinalMap && state.authorIntroTimer > 0) {
+    ctx.fillStyle = "#100d20ee";
+    ctx.fillRect(135, 380, 690, 105);
+    ctx.strokeStyle = "#ffd28a";
+    ctx.strokeRect(135, 380, 690, 105);
+    drawText("老人現出作者身分，鎖上回歸之門！", W / 2, 418, 20, "#ffd28a", "center");
+    drawText("我是作者，你只是個工具人。", W / 2, 455, 18, "#f4f0df", "center");
+  }
+  if (state.trueFinalMap && state.authorRevealed && state.screenFlipTimer > 0) {
+    drawText(`作者翻轉畫面・${state.screenFlipTimer.toFixed(1)} 秒`, W / 2, H - 16, 15, "#ffd28a", "center");
+  }
   if (state.worldReturned && !state.arenaMode) {
     ctx.fillStyle = "#102b24dd";
     ctx.fillRect(0, 0, W, H);
     drawText("返回正常世界", W / 2, H / 2 - 16, 38, "#8ce0b0", "center");
-    drawText(state.voidBossDefeated ? "十一張地圖全部完成・終焉核心已重啟" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
+    drawText(state.authorBossDefeated ? "作者已被擊敗・真正回到正常世界" : state.voidBossDefeated ? "十一張地圖全部完成・終焉核心已重啟" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
+    if (state.playthrough === 2 && state.authorBossDefeated) drawText("按 F 或 Enter 進入競技場，擊敗第 5 波 Boss 前往休息室", W / 2, H / 2 + 57, 15, "#b8ffe1", "center");
   }
   if (state.gameOver) {
     ctx.fillStyle = "#080912e8";
@@ -2486,7 +3165,7 @@ function draw() {
     ctx.strokeRect(230, 175, 500, 190);
     drawText("遊戲結束", W / 2, 235, 38, "#ff9b9f", "center");
     drawText("HP 已歸零", W / 2, 275, 18, "#f4f0df", "center");
-    drawText("按 F 進入競技場・按 X 重新開始", W / 2, 318, 16, "#f4d18d", "center");
+    drawText(state.arenaMode ? "按 X 返回正常世界" : "按 X 或下方按鈕重新開始", W / 2, 318, 16, "#f4d18d", "center");
   }
 
 }
@@ -2501,24 +3180,44 @@ function loop(now) {
 document.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (!event.repeat && ["a", "w", "d", "s"].includes(key)) {
-    state.secretBuffer = `${state.secretBuffer || ""}${key.toUpperCase()}`.slice(-SECRET_SEQUENCE.length);
-    if (state.secretBuffer === SECRET_SEQUENCE) {
+    state.secretBuffer = `${state.secretBuffer || ""}${key.toUpperCase()}`.slice(-SECRET_BUFFER_LENGTH);
+    if (state.secretBuffer.endsWith(SECRET_SEQUENCE)) {
       state.secretBuffer = "";
       startSecondPlaythrough();
       event.preventDefault();
       return;
     }
+    if (state.secretBuffer.endsWith(THIRD_SEQUENCE)) {
+      state.secretBuffer = "";
+      jumpToThirdPlaythroughGate();
+      event.preventDefault();
+      return;
+    }
+    if (!gameContent.hidden && state.secretBuffer.endsWith(MONEY_SEQUENCE)) {
+      state.secretBuffer = "";
+      player.money += 200000;
+      setMessage("密技成功！獲得 200,000 金。");
+      saveGame(false);
+      event.preventDefault();
+      return;
+    }
   }
+  if (gameContent.hidden) return;
   if (key === "x") {
     event.preventDefault();
-    resetGame();
+    if (!event.repeat) {
+      if (state.arenaMode) exitArenaMode();
+      else resetGame();
+    }
     return;
   }
   if (key === "p") {
     event.preventDefault();
-    state.paused = !state.paused;
-    keys.clear();
-    setMessage(state.paused ? "遊戲已暫停，按 P 繼續。" : "遊戲繼續。注意敵人的攻擊警示！");
+    if (!event.repeat) {
+      state.paused = !state.paused;
+      keys.clear();
+      setMessage(state.paused ? "遊戲已暫停，按 P 繼續。" : "遊戲繼續。注意敵人的攻擊警示！");
+    }
     return;
   }
   if ((key === "enter" || key === "return") && state.worldReturned && !state.arenaMode) {
@@ -2535,16 +3234,28 @@ document.addEventListener("keydown", (event) => {
   }
   keys.add(key);
   if (["a", "d", "w", "s", "e", "c", "f", "g", "r", "t", "q", "z", "b", "p"].includes(key)) event.preventDefault();
+  if (event.repeat) return;
   if (key === "c") switchDimension();
-  const nearElder = distanceToElder() < 90;
+  const extra = currentExtraMap();
+  const nearElder = !state.nextMap && !state.sanctumMap && !state.frostMap && !state.voidMap && !state.trueFinalMap && !extra && !state.arenaMode && distanceToElder() < 90;
   const nearGate = state.dimension === "2D" && Math.hypot(player.x - dimensionGate.x, player.y - dimensionGate.y) < 85;
   const nearRuinExit = state.nextMap && Math.hypot(player.x - ruinExit.x, player.y - ruinExit.y) < 85;
   const nearSanctumExit = state.sanctumMap && Math.hypot(player.x - sanctumExit.x, player.y - sanctumExit.y) < 85;
   const nearFrostExit = state.frostMap && Math.hypot(player.x - frostExit.x, player.y - frostExit.y) < 85;
   const nearVoidExit = state.voidMap && Math.hypot(player.x - voidExit.x, player.y - voidExit.y) < 85;
+  const nearExtraExit = extra && Math.hypot(player.x - extra.exit.x, player.y - extra.exit.y) < 85;
+  const nearTrueFinalExit = state.trueFinalMap && Math.hypot(player.x - trueFinalExit.x, player.y - trueFinalExit.y) < 85;
   const nearArena = state.worldReturned && !state.arenaMode;
-  if (key === "f" && (nearElder || nearGate || nearRuinExit || nearSanctumExit || nearFrostExit || nearVoidExit || nearArena)) interact();
-  if (key === "f" && distanceToMerchant() < 90) toggleShop();
+  const nearThirdGate = state.arenaRestRoom && state.playthrough === 2 && state.authorBossDefeated
+    && Math.hypot(player.x - thirdPlaythroughGate.x, player.y - thirdPlaythroughGate.y) < 85;
+  const nearArenaContinue = state.arenaRestRoom && !(state.playthrough === 2 && state.authorBossDefeated)
+    && Math.hypot(player.x - arenaContinueGate.x, player.y - arenaContinueGate.y) < 85;
+  const nearChallenger = state.arenaRestRoom
+    && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85;
+  if (key === "f") {
+    if (nearElder || nearGate || nearRuinExit || nearSanctumExit || nearFrostExit || nearVoidExit || nearExtraExit || nearTrueFinalExit || nearArena || nearThirdGate || nearArenaContinue || nearChallenger) interact();
+    else if (distanceToMerchant() < 90) toggleShop();
+  }
   if (key === "g" && distanceToMerchant() < 90) toggleBetting();
   if (key === "r" && player.potions > 0 && player.hp < player.maxHp) {
     player.potions -= 1;
@@ -2633,7 +3344,10 @@ betting.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (button) placeBet(button.dataset.guess);
 });
-restartButton.addEventListener("click", resetGame);
+restartButton.addEventListener("click", () => {
+  if (state.arenaMode) exitArenaMode();
+  else resetGame();
+});
 loadSaveButton.addEventListener("click", loadGame);
 clearSaveButton.addEventListener("click", clearSave);
 startGameButton.addEventListener("click", startNewGame);
