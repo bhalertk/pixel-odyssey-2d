@@ -5,6 +5,15 @@ const vm = require("node:vm");
 function createGame(storage = new Map()) {
   const elements = new Map();
   const listeners = new Map();
+  const touchButtons = new Map();
+  for (const control of ["a", "w", "s", "d", "e", "attack", "c", "f", "r", "t", "q", "z", "b", "shop", "g", "save", "load", "p", "x", "fullscreen"]) {
+    const handlers = new Map();
+    touchButtons.set(control, {
+      dataset: { control },
+      addEventListener: (name, handler) => handlers.set(name, handler),
+      trigger: (name) => handlers.get(name)?.({ preventDefault() {} }),
+    });
+  }
   const drawing = new Proxy({}, {
     get(_target, key) {
       if (key === "createLinearGradient" || key === "createRadialGradient") {
@@ -31,7 +40,7 @@ function createGame(storage = new Map()) {
     return elements.get(selector);
   }
   const sandbox = {
-    document: { querySelector: element, querySelectorAll: () => [], addEventListener: (name, handler) => listeners.set(name, handler) },
+    document: { querySelector: element, querySelectorAll: (selector) => selector === "[data-control]" ? [...touchButtons.values()] : [], addEventListener: (name, handler) => listeners.set(name, handler) },
     window: { devicePixelRatio: 1, addEventListener() {} },
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -40,6 +49,8 @@ function createGame(storage = new Map()) {
     },
     performance: { now: () => 1000 },
     setInterval() {},
+    setTimeout: () => 0,
+    clearTimeout() {},
     Math,
   };
   vm.createContext(sandbox);
@@ -47,6 +58,7 @@ function createGame(storage = new Map()) {
   return {
     run: (source) => vm.runInContext(source, sandbox),
     press: (key) => listeners.get("keydown")({ key, repeat: false, preventDefault() {} }),
+    touch: (control, event = "click") => touchButtons.get(control).trigger(event),
     storage,
   };
 }
@@ -132,19 +144,83 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.cutscenePhase"), "light");
   game.run("draw(); update(4)");
   assert.equal(game.run("state.playthrough"), 4);
-  assert.equal(game.run("mainMenu.hidden"), false);
-  assert.equal(game.run("gameContent.hidden"), true);
+  assert.equal(game.run("mainMenu.hidden"), true);
+  assert.equal(game.run("gameContent.hidden"), false);
   assert.equal(game.run("mainMenu.dataset.playthrough"), "4");
   assert.equal(game.run("startFourthButton.hidden"), false);
   assert.equal(game.storage.get("pixel-odyssey-2d-fourth-unlocked"), "1");
-  game.run("enterFourthPlaythrough()");
-  assert.equal(game.run("gameContent.hidden"), false);
-  assert.equal(game.run("state.playthrough"), 4);
+  assert.equal(game.storage.get("pixel-odyssey-2d-fourth-entered"), "1");
   const reloaded = createGame(game.storage);
   assert.equal(reloaded.run("startFourthButton.hidden"), false);
   assert.equal(reloaded.run("mainMenu.dataset.playthrough"), "4");
   reloaded.run("enterFourthPlaythrough()");
   assert.equal(reloaded.run("state.playthrough"), 4);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4)");
+  assert.equal(game.run("state.elderTalked"), true);
+  assert.equal(game.run("enemies[0].active"), true);
+  assert.equal(game.run("allCombatants.every((enemy) => enemy.infected)"), true);
+  assert.ok(game.run("enemies[0].maxHp") > 5);
+  assert.equal(game.run("infectedMerchant.active"), true);
+  game.run("draw(); player.x = infectedMerchant.x - 120; infectedMerchant.attackCooldown = 0; update(0.016)");
+  assert.ok(game.run("infectedMerchant.attackWindup") > 0);
+  game.run("player.x = merchant.x; toggleShop()");
+  assert.equal(game.run("shop.hidden"), true);
+  game.run("state.defeatedBosses = bosses.length; dimensionGate.unlocked = true; state.dimension = '2D'; player.x = dimensionGate.x; player.y = dimensionGate.y; enterDimensionGate()");
+  assert.equal(game.run("state.nextMap"), false);
+  game.run("infectedMerchant.hp = 0; update(0.016)");
+  assert.equal(game.run("state.merchantDefeated"), true);
+  game.run("player.x = caveEntrance.x; player.y = caveEntrance.y; interact()");
+  assert.equal(game.run("state.caveMode"), true);
+  game.run("draw(); saveGame(false); loadGame()");
+  assert.equal(game.run("state.caveMode"), true);
+  game.run("player.x = survivor.x; interact()");
+  assert.equal(game.run("state.remoteTradeUnlocked"), true);
+  game.run("draw()");
+  game.run("player.x = caveExit.x; interact()");
+  assert.equal(game.run("state.caveMode"), false);
+  game.run("player.x = 120; toggleShop()");
+  assert.equal(game.run("shop.hidden"), false);
+  game.run("toggleBetting()");
+  assert.equal(game.run("shop.hidden"), true);
+  assert.equal(game.run("betting.hidden"), false);
+  game.run("saveGame(false); loadGame()");
+  assert.equal(game.run("state.merchantDefeated"), true);
+  assert.equal(game.run("state.remoteTradeUnlocked"), true);
+  assert.equal(game.run("infectedMerchant.active"), false);
+  game.run("state.nextMap = true; state.ruinObjectiveComplete = true; state.ruinRuneCount = 0; player.x = ruinRunes[0].x; player.y = ruinRunes[0].y; collectRuinRunes()");
+  assert.equal(game.run("state.ruinRuneCount"), 1);
+  game.run("player.x = ruinRunes[2].x; player.y = ruinRunes[2].y; collectRuinRunes(); player.x = ruinRunes[1].x; player.y = ruinRunes[1].y; collectRuinRunes()");
+  assert.equal(game.run("ruinExit.unlocked"), true);
+  game.run("state.nextMap = false; enterExtraMap(1); currentExtraMap().boss.hp = 0; state.dimension = '2D'; player.x = currentExtraMap().puzzleNodes[2].x; player.y = currentExtraMap().puzzleNodes[2].y; collectExtraPuzzle()");
+  assert.equal(game.run("state.extraPuzzleCount"), 1);
+  game.run("player.x = currentExtraMap().puzzleNodes[1].x; player.y = currentExtraMap().puzzleNodes[1].y; collectExtraPuzzle(); player.x = currentExtraMap().puzzleNodes[0].x; player.y = currentExtraMap().puzzleNodes[0].y; collectExtraPuzzle()");
+  assert.equal(game.run("state.extraExitUnlocked"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame()");
+  game.touch("d", "pointerdown");
+  assert.equal(game.run("keys.has('d')"), true);
+  game.touch("d", "pointerup");
+  assert.equal(game.run("keys.has('d')"), false);
+  game.run("state.dimension = '2D'; player.hp = 2; player.potions = 1");
+  game.touch("r");
+  assert.equal(game.run("player.hp"), 3);
+  assert.equal(game.run("player.potions"), 0);
+  game.touch("p");
+  assert.equal(game.run("state.paused"), true);
+  game.touch("p");
+  assert.equal(game.run("state.paused"), false);
+  game.touch("save");
+  assert.ok(game.storage.has("pixel-odyssey-2d-save"));
+  game.run("player.money = 123");
+  game.touch("load");
+  assert.equal(game.run("player.money"), 0);
 }
 
 {
@@ -214,4 +290,4 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.cutscenePhase"), "author");
 }
 
-console.log("Arena roster, challenger dialog, merchant, finale, elevator, fourth playthrough, cheat, and save/load passed.");
+console.log("Arena, finale, direct fourth playthrough, infection cave, mobile controls, puzzles, and save/load passed.");

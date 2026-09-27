@@ -2,9 +2,9 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Pixel Odyssey 2D - 開場原型</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260927b" />
   </head>
   <body>
     <main class="game-shell">
@@ -25,7 +25,7 @@
           <strong>操作說明</strong>
           <span>A / D 移動・W / S（2D）探索</span>
           <span>左鍵攻擊（間隔 1 秒）・E 舉盾 0.3 秒（間隔 1 秒）</span>
-          <span>C 切換 2D・F 對話／互動・G 賭錢</span>
+          <span>C 切換 2D・F 對話／互動・H 商店・G 賭錢</span>
           <span>R 使用生命藥水・X 重新開始／離開競技場</span>
         </div>
         <div class="audio-settings">
@@ -44,15 +44,17 @@
         <p class="hint">點擊畫面取得控制權</p>
       </header>
       <section id="game-content" hidden>
+      <p class="orientation-hint">橫向遊玩可看得更清楚，也能同時使用移動與攻擊按鈕。</p>
       <section class="game-frame">
         <canvas id="game" width="960" height="540" aria-label="遊戲畫面"></canvas>
+        <p id="mobile-message" class="mobile-message" role="status" hidden></p>
         <div class="controls">
           <span><b>A / D</b> 移動</span>
           <span><b>滑鼠左鍵</b> 攻擊／盾反（間隔 1 秒）</span>
           <span><b>E</b> 舉盾 0.3 秒／反震敵人（間隔 1 秒）</span>
           <span><b>C</b> 切換維度</span>
           <span><b>F</b> 對話／商店</span>
-          <span><b>G</b> 賭錢</span>
+          <span><b>H</b> 商店・<b>G</b> 賭錢</span>
           <span><b>R</b> 使用生命藥水</span>
           <span><b>T</b> 狂戰藥水・<b>Q</b> 星塵炸彈</span>
           <span><b>Z</b> 解謎羅盤・<b>B</b> 護盾晶核</span>
@@ -60,14 +62,35 @@
           <span><b>X</b> 重新開始／離開競技場</span>
         </div>
         <div class="touch-controls" aria-label="螢幕操作">
-          <button type="button" data-control="a">◀</button>
-          <button type="button" data-control="w">▲</button>
-          <button type="button" data-control="s">▼</button>
-          <button type="button" data-control="d">▶</button>
-          <button type="button" data-control="e">盾</button>
-          <button type="button" data-control="attack">劍／盾反</button>
-          <button type="button" data-control="c">2D</button>
-          <button type="button" data-control="f">互動</button>
+          <div class="touch-pad" aria-label="移動">
+            <button type="button" data-control="a" aria-label="向左移動">◀</button>
+            <button type="button" data-control="w" aria-label="向上移動">▲</button>
+            <button type="button" data-control="s" aria-label="向下移動">▼</button>
+            <button type="button" data-control="d" aria-label="向右移動">▶</button>
+          </div>
+          <div class="touch-actions" aria-label="戰鬥與互動">
+            <button type="button" data-control="e" aria-label="舉盾">舉盾</button>
+            <button type="button" data-control="attack" aria-label="攻擊或盾反">攻擊</button>
+            <button type="button" data-control="c" aria-label="切換 2D 維度">2D</button>
+            <button type="button" data-control="f" aria-label="互動">互動</button>
+          </div>
+          <details class="touch-extra">
+            <summary>道具與選單</summary>
+            <div class="touch-extra-buttons">
+              <button type="button" data-control="r">生命藥水</button>
+              <button type="button" data-control="t">狂戰藥水</button>
+              <button type="button" data-control="q">星塵炸彈</button>
+              <button type="button" data-control="z">羅盤</button>
+              <button type="button" data-control="b">護盾晶核</button>
+              <button type="button" data-control="shop">商店</button>
+              <button type="button" data-control="g">賭桌</button>
+              <button type="button" data-control="save">儲存進度</button>
+              <button type="button" data-control="load">讀取進度</button>
+              <button type="button" data-control="p">暫停</button>
+              <button type="button" data-control="x">重新開始／離開</button>
+              <button type="button" data-control="fullscreen">全螢幕</button>
+            </div>
+          </details>
         </div>
       </section>
       <section class="customization" aria-label="角色外觀設定">
@@ -80,8 +103,8 @@
         <label><input id="beard-enabled" type="checkbox" /> 鬍子</label>
         <label><input id="glasses-enabled" type="checkbox" /> 眼鏡</label>
       </section>
-      <section id="shop" class="shop" hidden aria-label="商人商店">
-        <strong>商人：用金錢換取冒險物資</strong>
+      <section id="shop" class="shop" hidden aria-label="補給商店">
+        <strong>補給商店：用金錢換取冒險物資</strong>
         <button data-item="armor">防具（45 金）</button>
         <button data-item="potion">生命藥水（30 金）</button>
         <button data-item="weapon">強化武器（75 金）</button>
@@ -111,6 +134,6 @@
       <p id="message" class="message">前往老人身邊，按 <b>F</b> 開始對話。</p>
       </section>
     </main>
-    <script src="game.js"></script>
+    <script src="game.js?v=20260927b"></script>
   </body>
 </html>
