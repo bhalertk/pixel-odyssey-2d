@@ -144,6 +144,12 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.cutscenePhase"), "light");
   game.run("draw(); update(4)");
   assert.equal(game.run("state.playthrough"), 4);
+  assert.equal(game.run("inFirstMap()"), true);
+  assert.equal(game.run("state.dimension"), "1D");
+  assert.equal(game.run("player.x"), 150);
+  assert.equal(game.run("player.y"), 370);
+  assert.equal(game.run("state.worldReturned"), false);
+  assert.equal(game.run("state.arenaMode"), false);
   assert.equal(game.run("mainMenu.hidden"), true);
   assert.equal(game.run("gameContent.hidden"), false);
   assert.equal(game.run("mainMenu.dataset.playthrough"), "4");
@@ -155,6 +161,7 @@ function defeatCurrent(game) {
   assert.equal(reloaded.run("mainMenu.dataset.playthrough"), "4");
   reloaded.run("enterFourthPlaythrough()");
   assert.equal(reloaded.run("state.playthrough"), 4);
+  assert.equal(reloaded.run("inFirstMap()"), true);
 }
 
 {

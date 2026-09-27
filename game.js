@@ -1737,7 +1737,7 @@ function startPlaythrough(playthrough) {
   glassesInput.checked = player.glasses;
   showGame();
   setMessage(playthrough === 4
-    ? "四周目開始！敵人和 Boss 受到神秘物質感染；商人失控了，先擊敗他再探索洞穴。"
+    ? "四周目從第一世界開始！敵人和 Boss 受到神秘物質感染；商人失控了，先擊敗他再探索洞穴。"
     : `${playthrough === 3 ? "三" : "二"}周目開始！敵人與 Boss 變強了。先去找老人，他會告訴你前往維度核心的真正目標。`);
   saveGame(false);
 }
@@ -3013,6 +3013,7 @@ function drawBackground() {
     ctx.fillRect(0, 382, W, 6);
     drawText("1D 維度：你只能沿著這條路前進", 24, 105, 14, "#9da5d4");
   }
+  if (state.playthrough === 4) drawText("第一世界：感染邊境", 24, 155, 14, "#e5a2ed");
   if (state.playthrough === 4 && state.merchantDefeated) {
     drawPortal(caveEntrance.x, caveEntrance.y, true, "#d786e5");
     drawText("倖存者洞穴・按 F", caveEntrance.x, caveEntrance.y + 58, 12, "#f2c6f7", "center");
@@ -3496,7 +3497,7 @@ function drawHud() {
   ctx.fillRect(0, 72, W, 2);
   drawText(`維度：${state.dimension}`, 24, 30, 18, state.dimension === "2D" ? "#79d3c9" : "#c3c8ed");
   const extra = currentExtraMap();
-  const mapLabel = state.caveMode ? "倖存者洞穴" : state.elevatorMode ? "上升電梯" : state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : "地圖 1";
+  const mapLabel = state.caveMode ? "倖存者洞穴" : state.elevatorMode ? "上升電梯" : state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : state.playthrough === 4 ? "第一世界" : "地圖 1";
   drawText(`${mapLabel}${state.playthrough === 4 ? "・四周目" : state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
   const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
