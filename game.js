@@ -120,24 +120,25 @@ const frostEnemies = [
   { type: "寒晶術士", attackType: "ranged", color: "#9ee7ff", x: 690, y: 370, size: 31, hp: 5, maxHp: 5, speed: 0.45, range: 250, cooldown: 1.8, damage: 1 },
 ].map((enemy) => ({ ...enemy, startX: enemy.x, startY: enemy.y, active: false, attackCooldown: enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 }));
 const voidExit = { x: 900, y: 370, unlocked: false };
+const voidAnchor = { x: 490, y: 255, radius: 48 };
 const voidBoss = { type: "虛空君王", attackType: "void", color: "#7f55d9", x: 610, y: 370, size: 68, hp: 18, maxHp: 18, speed: 0.62, range: 230, cooldown: 1.6, damage: 1.5, startX: 610, startY: 370, active: false, attackCooldown: 1.6, attackWindup: 0, stunned: 0, hitFlash: 0 };
 const extraMaps = [
-  { title: "星塵荒原", color: "#8bd7e8", puzzle: "收集三枚星核", nodes: 3,
+  { title: "星塵荒原", color: "#8bd7e8", puzzle: "任選星核 → 最遠星核 → 剩下的星核", infectedPuzzle: "任選星核 → 最近星核 → 剩下的星核", kind: "constellation", nodes: 3,
     enemy: { type: "星塵爬行者", attackType: "dash", color: "#4ca7c4", size: 30, hp: 6, speed: 1.2, range: 90, cooldown: 1.3, damage: 1 },
     boss: { type: "星蝕巨獸", attackType: "shockwave", color: "#6f7be7", size: 58, hp: 16, speed: 0.58, range: 210, cooldown: 2, damage: 1.5 } },
-  { title: "齒輪深窟", color: "#d8aa67", puzzle: "依序啟動四座齒輪", nodes: 4,
+  { title: "齒輪深窟", color: "#d8aa67", puzzle: "踩踏會轉動自己與下一座齒輪；四座刻度都到 1", infectedPuzzle: "感染齒輪：自己與下一座一起轉，四座刻度都到 2", kind: "gears", nodes: 4,
     enemy: { type: "齒輪侍從", attackType: "melee", color: "#aa7d4f", size: 32, hp: 7, speed: 0.95, range: 92, cooldown: 1.2, damage: 1 },
     boss: { type: "機械心臟", attackType: "smash", color: "#c98247", size: 60, hp: 18, speed: 0.46, range: 130, cooldown: 1.8, damage: 2 } },
-  { title: "潮汐墓園", color: "#77c9b8", puzzle: "讓四盞潮燈同時發光", nodes: 4,
+  { title: "潮汐墓園", color: "#77c9b8", puzzle: "18 秒內點亮四盞潮燈（順序不限）", infectedPuzzle: "14 秒內點亮四盞感染潮燈", kind: "tide", nodes: 4,
     enemy: { type: "潮影", attackType: "ranged", color: "#3d9d9b", size: 29, hp: 7, speed: 0.65, range: 240, cooldown: 1.65, damage: 1 },
     boss: { type: "深潮女王", attackType: "void", color: "#3988b8", size: 58, hp: 20, speed: 0.65, range: 230, cooldown: 1.55, damage: 1.5 } },
-  { title: "赤焰高原", color: "#ef8b5e", puzzle: "踩過三個冷卻符文", nodes: 3,
+  { title: "赤焰高原", color: "#ef8b5e", puzzle: "調整冷卻刻度到 1・2・1（每次踩踏加一）", infectedPuzzle: "調整感染刻度到 2・1・2", kind: "fire", nodes: 3,
     enemy: { type: "熔火獵犬", attackType: "leap", color: "#d9684e", size: 34, hp: 8, speed: 1.1, range: 100, cooldown: 1.4, damage: 1.5 },
     boss: { type: "赤焰龍王", attackType: "ranged", color: "#de553e", size: 64, hp: 22, speed: 0.55, range: 260, cooldown: 1.35, damage: 2 } },
-  { title: "時鐘盡頭", color: "#d7c27b", puzzle: "依序觸碰五枚時輪", nodes: 5,
+  { title: "時鐘盡頭", color: "#d7c27b", puzzle: "跨時針：1 → 3 → 5 → 2 → 4", infectedPuzzle: "逆轉時針：4 → 2 → 5 → 3 → 1", kind: "path", order: [0, 2, 4, 1, 3], infectedOrder: [3, 1, 4, 2, 0], nodes: 5,
     enemy: { type: "時隙刺客", attackType: "dash", color: "#9b7ad8", size: 28, hp: 9, speed: 1.35, range: 125, cooldown: 1.05, damage: 1.5 },
     boss: { type: "永恆鐘王", attackType: "dimension", color: "#d1a647", size: 66, hp: 26, speed: 0.7, range: 170, cooldown: 1.3, damage: 2 } },
-  { title: "終焉核心", color: "#ff7188", puzzle: "重啟六枚終焉核心", nodes: 6,
+  { title: "終焉核心", color: "#ff7188", puzzle: "配對核心：1 ↔ 6、2 ↔ 5、3 ↔ 4", infectedPuzzle: "感染配對：1 ↔ 4、2 ↔ 5、3 ↔ 6", kind: "pairs", nodes: 6,
     enemy: { type: "終焉獵犬", attackType: "leap", color: "#d94868", size: 38, hp: 12, speed: 1.35, range: 115, cooldown: 1.15, damage: 2 },
     boss: { type: "創世終焉者", attackType: "void", color: "#ff466d", size: 76, hp: 36, speed: 0.78, range: 260, cooldown: 1.15, damage: 2.5 } },
 ].map((map, mapIndex) => {
@@ -152,6 +153,7 @@ const extraMaps = [
       y: 145 + Math.floor(index / 3) * 130,
       collected: false,
       nearby: false,
+      level: 0,
     })),
     exit: { x: 900, y: 370, unlocked: false },
   };
@@ -319,9 +321,12 @@ const state = {
   frostSealCount: 0,
   voidMap: false,
   voidBossDefeated: false,
+  voidCharge: 0,
   extraMap: 0,
   extraEnemyDefeated: false,
   extraPuzzleCount: 0,
+  extraPuzzleTimer: 0,
+  extraPuzzleSelected: -1,
   extraExitUnlocked: false,
   trueFinalMap: false,
   trueFinalBossDefeated: false,
@@ -450,8 +455,10 @@ function saveGame(announce = true) {
       frostMap: state.frostMap, frostDefeated: state.frostDefeated,
       frostSealCount: state.frostSealCount, voidMap: state.voidMap,
       voidBossDefeated: state.voidBossDefeated,
+      voidCharge: state.voidCharge,
       extraMap: state.extraMap, extraEnemyDefeated: state.extraEnemyDefeated,
       extraPuzzleCount: state.extraPuzzleCount, extraExitUnlocked: state.extraExitUnlocked,
+      extraPuzzleTimer: state.extraPuzzleTimer, extraPuzzleSelected: state.extraPuzzleSelected,
       trueFinalMap: state.trueFinalMap, trueFinalBossDefeated: state.trueFinalBossDefeated,
       authorRevealed: state.authorRevealed, authorIntroTimer: state.authorIntroTimer,
       authorBossDefeated: state.authorBossDefeated,
@@ -534,7 +541,7 @@ function saveGame(announce = true) {
     extraMaps: extraMaps.map((map) => ({
       enemy: { x: map.enemy.x, y: map.enemy.y, hp: map.enemy.hp, active: map.enemy.active, attackCooldown: map.enemy.attackCooldown },
       boss: { x: map.boss.x, y: map.boss.y, hp: map.boss.hp, active: map.boss.active, attackCooldown: map.boss.attackCooldown },
-      nodes: map.puzzleNodes.map((node) => node.collected), exit: map.exit.unlocked,
+      nodes: map.puzzleNodes.map((node) => node.collected), levels: map.puzzleNodes.map((node) => node.level), exit: map.exit.unlocked,
     })),
     savedAt: new Date().toISOString(),
   };
@@ -583,7 +590,7 @@ function loadGame() {
     player.beard = Boolean(player.beard);
     player.glasses = Boolean(player.glasses);
     Object.assign(state, save.state, { gameOver: false, paused: false, secretBuffer: "", dialog: false, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, lastTime: performance.now() });
-    state.playthrough = [1, 2, 3, 4].includes(save.state.playthrough) ? save.state.playthrough : 1;
+    state.playthrough = [1, 2, 3, 4, 5].includes(save.state.playthrough) ? save.state.playthrough : 1;
     setEnemyDifficulty(state.playthrough);
     if (state.playthrough === 4) {
       state.elderTalked = true;
@@ -606,7 +613,7 @@ function loadGame() {
     state.arenaFinalBossDefeated = Boolean(save.state.arenaFinalBossDefeated);
     state.arenaBestWave = Number.isFinite(save.state.arenaBestWave)
       ? Math.max(0, Math.floor(save.state.arenaBestWave)) : 0;
-    state.challengerDialogOpen = state.arenaMode && state.arenaRestRoom
+    state.challengerDialogOpen = state.playthrough !== 5 && state.arenaMode && state.arenaRestRoom
       && Boolean(save.state.challengerDialogOpen);
     state.cutscenePhase = ["author", "push", "stand", "light"].includes(save.state.cutscenePhase)
       ? save.state.cutscenePhase : "";
@@ -692,10 +699,13 @@ function loadGame() {
     frostExit.unlocked = state.frostDefeated >= frostEnemies.length && state.frostSealCount === frostSeals.length;
     state.voidMap = Boolean(save.state.voidMap);
     state.voidBossDefeated = Boolean(save.state.voidBossDefeated || voidBoss.hp <= 0);
-    voidExit.unlocked = state.voidBossDefeated;
+    state.voidCharge = Number.isFinite(save.state.voidCharge) ? Math.max(0, Math.min(3, save.state.voidCharge)) : state.voidBossDefeated ? 3 : 0;
+    voidExit.unlocked = state.voidBossDefeated && state.voidCharge >= 3;
     state.extraMap = Number.isFinite(save.state.extraMap) ? Math.max(0, Math.min(extraMaps.length, save.state.extraMap)) : 0;
     state.extraEnemyDefeated = Boolean(save.state.extraEnemyDefeated);
     state.extraPuzzleCount = Number.isFinite(save.state.extraPuzzleCount) ? save.state.extraPuzzleCount : 0;
+    state.extraPuzzleTimer = Number.isFinite(save.state.extraPuzzleTimer) ? Math.max(0, Math.min(18, save.state.extraPuzzleTimer)) : 0;
+    state.extraPuzzleSelected = Number.isInteger(save.state.extraPuzzleSelected) ? save.state.extraPuzzleSelected : -1;
     state.extraExitUnlocked = Boolean(save.state.extraExitUnlocked);
     state.trueFinalBossDefeated = state.playthrough >= 2 && Boolean(save.state.trueFinalBossDefeated);
     state.trueFinalMap = state.playthrough >= 2 && Boolean(save.state.trueFinalMap);
@@ -740,17 +750,25 @@ function loadGame() {
         state.screenFlipTimer = 0;
       }
     }
-    extraMaps.forEach((map) => { map.puzzleNodes.forEach((node, index) => { node.collected = index < state.extraPuzzleCount; node.nearby = false; }); map.exit.unlocked = false; map.enemy.active = false; map.boss.active = false; });
+    extraMaps.forEach((map) => { map.puzzleNodes.forEach((node) => { node.collected = false; node.nearby = false; node.level = 0; }); map.exit.unlocked = false; map.enemy.active = false; map.boss.active = false; });
     if (Array.isArray(save.extraMaps)) save.extraMaps.forEach((savedMap, index) => {
       const map = extraMaps[index];
       if (!map || !savedMap) return;
       restoreCombatant(map.enemy, savedMap.enemy);
       restoreCombatant(map.boss, savedMap.boss);
       if (Array.isArray(savedMap.nodes)) map.puzzleNodes.forEach((node, nodeIndex) => { node.collected = Boolean(savedMap.nodes[nodeIndex]); });
+      if (Array.isArray(savedMap.levels)) map.puzzleNodes.forEach((node, nodeIndex) => { node.level = Number.isFinite(savedMap.levels[nodeIndex]) ? Math.max(0, Math.min(2, savedMap.levels[nodeIndex])) : 0; });
+      else if (!savedMap.exit) map.puzzleNodes.forEach((node) => { node.collected = false; }); // Old sequence progress may be impossible under the new rules.
       map.exit.unlocked = Boolean(savedMap.exit);
     });
     if (state.extraMap > 0) {
       const current = extraMaps[state.extraMap - 1];
+      state.extraPuzzleCount = current.puzzleNodes.filter((node) => node.collected).length;
+      if (current.kind === "fire") state.extraPuzzleCount = current.puzzleNodes.filter((node, index) => node.level === fireTargets()[index]).length;
+      if (state.extraPuzzleSelected < 0 || state.extraPuzzleSelected >= current.nodes
+        || current.kind === "pairs" && current.puzzleNodes[state.extraPuzzleSelected].collected
+        || current.kind === "constellation" && state.extraPuzzleCount !== 1) state.extraPuzzleSelected = -1;
+      if (current.kind !== "tide") state.extraPuzzleTimer = 0;
       current.enemy.active = !state.extraEnemyDefeated && current.enemy.hp > 0;
       current.boss.active = state.extraEnemyDefeated && current.boss.hp > 0;
       current.exit.unlocked = state.extraExitUnlocked;
@@ -860,7 +878,7 @@ function resetGame() {
     tutorialStep: 0, attackTimer: 0, swordCooldown: 0, shieldTimer: 0, shieldCooldown: 0, comboCount: 0, comboTimer: 0, powerTimer: 0, modeTimer: 0, cooldown: 0,
     gameOver: false, paused: false, defeatedEnemies: 0, defeatedBosses: 0, bossPhase: false,
     worldReturned: false, nextMap: false, shardCount: 0, bossRestTimer: 0,
-    extraMap: 0, extraEnemyDefeated: false, extraPuzzleCount: 0, extraExitUnlocked: false,
+    extraMap: 0, extraEnemyDefeated: false, extraPuzzleCount: 0, extraPuzzleTimer: 0, extraPuzzleSelected: -1, extraExitUnlocked: false,
     trueFinalMap: false, trueFinalBossDefeated: false, authorRevealed: false, authorIntroTimer: 0,
     authorBossDefeated: false, screenFlipTimer: 0, trueFinalExitEntered: false,
     arenaMode: false, arenaRestRoom: false, arenaWave: 0, arenaBossActive: false,
@@ -875,7 +893,7 @@ function resetGame() {
     ruinRuneCount: 0,
     sanctumMap: false, sanctumShardCount: 1,
     frostMap: false, frostDefeated: 0, frostSealCount: 0,
-    voidMap: false, voidBossDefeated: false,
+    voidMap: false, voidBossDefeated: false, voidCharge: 0,
   });
   screenShake = 0;
   shards.forEach((shard) => { shard.collected = false; });
@@ -945,7 +963,7 @@ function resetGame() {
   extraMaps.forEach((map) => {
     Object.assign(map.enemy, { x: map.enemy.startX, y: map.enemy.startY, hp: map.enemy.maxHp, active: false, attackCooldown: map.enemy.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 });
     Object.assign(map.boss, { x: map.boss.startX, y: map.boss.startY, hp: map.boss.maxHp, active: false, attackCooldown: map.boss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0 });
-    map.puzzleNodes.forEach((node) => { node.collected = false; node.nearby = false; });
+    map.puzzleNodes.forEach((node) => { node.collected = false; node.nearby = false; node.level = 0; });
     map.exit.unlocked = false;
   });
   [...arenaEnemyPool, ...arenaBossPool].forEach((combatant) => {
@@ -1281,18 +1299,31 @@ function collectSanctumShards() {
 
 function collectFrostSeals() {
   if (!state.frostMap || state.frostDefeated < frostEnemies.length || state.dimension !== "2D") return;
-  frostSeals.forEach((seal) => {
+  const order = state.playthrough === 4 ? [2, 1, 0] : [1, 0, 2];
+  const expected = order.find((index) => !frostSeals[index].collected);
+  frostSeals.forEach((seal, index) => {
     if (!seal.collected && Math.hypot(player.x - seal.x, player.y - seal.y) < 34) {
+      if (index !== expected) return;
       seal.collected = true;
       state.frostSealCount += 1;
       emitParticles(seal.x, seal.y, "#9ee7ff", 18, 2.8);
       playSound(680 + state.frostSealCount * 70, 0.13, "sine");
-      setMessage(`取得寒霜印記 ${state.frostSealCount} / ${frostSeals.length}。`);
+      setMessage(`寒霜印記依序共鳴 ${state.frostSealCount} / ${frostSeals.length}。`);
     }
   });
   if (state.frostSealCount === frostSeals.length && !frostExit.unlocked) {
     frostExit.unlocked = true;
     setMessage("三枚寒霜印記融入門扉，通往虛空王座的道路已開啟！");
+  }
+}
+
+function chargeVoidAnchor(dt) {
+  if (!state.voidMap || !state.voidBossDefeated || voidExit.unlocked) return;
+  const nearby = state.dimension === "2D" && Math.hypot(player.x - voidAnchor.x, player.y - voidAnchor.y) < voidAnchor.radius;
+  state.voidCharge = Math.max(0, Math.min(3, state.voidCharge + (nearby ? dt : -dt * 0.7)));
+  if (state.voidCharge >= 3) {
+    voidExit.unlocked = true;
+    setMessage("虛空錨點穩定了！最終出口已開啟。");
   }
 }
 
@@ -1307,27 +1338,107 @@ function inFirstMap() {
 }
 
 function extraPuzzleText(map) {
-  return state.playthrough === 4 ? `反向啟動${map.nodes}枚感染核心` : map.puzzle;
+  return state.playthrough === 4 ? map.infectedPuzzle : map.puzzle;
 }
 
-function collectExtraPuzzle() {
+function fireTargets() { return state.playthrough === 4 ? [2, 1, 2] : [1, 2, 1]; }
+
+function constellationChoices(map) {
+  if (state.extraPuzzleSelected < 0) return map.puzzleNodes.map((_, index) => index);
+  const origin = map.puzzleNodes[state.extraPuzzleSelected];
+  const candidates = map.puzzleNodes.map((node, index) => ({ index, distance: Math.hypot(node.x - origin.x, node.y - origin.y) }))
+    .filter(({ index }) => !map.puzzleNodes[index].collected);
+  const desired = state.playthrough === 4
+    ? Math.min(...candidates.map((candidate) => candidate.distance))
+    : Math.max(...candidates.map((candidate) => candidate.distance));
+  return candidates.filter((candidate) => candidate.distance === desired).map((candidate) => candidate.index);
+}
+
+function extraPuzzleTarget(map) {
+  if (map.kind === "path") return map.puzzleNodes[(state.playthrough === 4 ? map.infectedOrder : map.order)[state.extraPuzzleCount]];
+  if (map.kind === "constellation" && state.extraPuzzleCount === 1) return map.puzzleNodes[constellationChoices(map)[0]];
+  if (map.kind === "pairs" && state.extraPuzzleSelected >= 0) {
+    const selected = state.extraPuzzleSelected;
+    return map.puzzleNodes[state.playthrough === 4 ? (selected + 3) % 6 : 5 - selected];
+  }
+  if (map.kind === "fire") return map.puzzleNodes.find((node, index) => node.level !== fireTargets()[index]);
+  if (map.kind === "gears") return map.puzzleNodes.find((node) => node.level !== (state.playthrough === 4 ? 2 : 1));
+  return map.puzzleNodes.find((node) => !node.collected);
+}
+
+function collectExtraPuzzle(dt = 0) {
   const map = currentExtraMap();
-  if (!map || map.boss.hp > 0 || state.extraExitUnlocked || state.dimension !== "2D") return;
+  if (!map || map.boss.hp > 0 || state.extraExitUnlocked) return;
+  if (map.kind === "tide" && state.extraPuzzleTimer > 0) {
+    state.extraPuzzleTimer = Math.max(0, state.extraPuzzleTimer - dt);
+    if (state.extraPuzzleTimer === 0) {
+      map.puzzleNodes.forEach((node) => { node.collected = false; });
+      state.extraPuzzleCount = 0;
+      setMessage("潮汐退去，潮燈熄滅了。重新點亮第一盞燈即可再試。");
+    }
+  }
+  if (state.dimension !== "2D") {
+    map.puzzleNodes.forEach((node) => { node.nearby = false; });
+    return;
+  }
   map.puzzleNodes.forEach((node, index) => {
     const nearby = Math.hypot(player.x - node.x, player.y - node.y) < 38;
-    if (nearby && !node.nearby && !node.collected) {
-      const expected = state.playthrough === 4 ? map.nodes - 1 - state.extraPuzzleCount : state.extraPuzzleCount;
-      if (index === expected) {
+    if (nearby && !node.nearby && (!node.collected || map.kind === "fire" || map.kind === "gears")) {
+      if (map.kind === "gears") {
+        node.level = (node.level + 1) % 3;
+        const next = map.puzzleNodes[(index + 1) % map.nodes];
+        next.level = (next.level + 1) % 3;
+        map.puzzleNodes.forEach((item) => { item.collected = item.level === (state.playthrough === 4 ? 2 : 1); });
+        state.extraPuzzleCount = map.puzzleNodes.filter((item) => item.collected).length;
+        setMessage(`齒輪刻度：${map.puzzleNodes.map((item) => item.level).join("・")}；目標全為 ${state.playthrough === 4 ? 2 : 1}。`);
+      } else if (map.kind === "fire") {
+        node.level = (node.level + 1) % 3;
+        map.puzzleNodes.forEach((item, i) => { item.collected = item.level === fireTargets()[i]; });
+        state.extraPuzzleCount = map.puzzleNodes.filter((item) => item.collected).length;
+        setMessage(`冷卻刻度：${map.puzzleNodes.map((item) => item.level).join("・")}；目標 ${fireTargets().join("・")}。`);
+      } else if (map.kind === "constellation") {
+        if (state.extraPuzzleCount === 0) state.extraPuzzleSelected = index;
+        if (state.extraPuzzleCount !== 1 || constellationChoices(map).includes(index)) {
+          node.collected = true;
+          state.extraPuzzleCount += 1;
+          emitParticles(node.x, node.y, map.color, 16, 2.8);
+          setMessage(`${extraPuzzleText(map)}（${state.extraPuzzleCount} / ${map.nodes}）`);
+        } else {
+          map.puzzleNodes.forEach((item) => { item.collected = false; });
+          state.extraPuzzleCount = 0;
+          state.extraPuzzleSelected = -1;
+          setMessage(`星圖連線錯誤，重新開始。${extraPuzzleText(map)}。`);
+        }
+      } else if (map.kind === "pairs") {
+        if (state.extraPuzzleSelected < 0) {
+          state.extraPuzzleSelected = index;
+          setMessage(`已選取核心 ${index + 1}，尋找配對核心。${extraPuzzleText(map)}。`);
+        } else {
+          const partner = state.playthrough === 4 ? (state.extraPuzzleSelected + 3) % 6 : 5 - state.extraPuzzleSelected;
+          if (index === partner) {
+            node.collected = true;
+            map.puzzleNodes[state.extraPuzzleSelected].collected = true;
+            state.extraPuzzleCount += 2;
+            emitParticles(node.x, node.y, map.color, 16, 2.8);
+            setMessage(`核心配對成功（${state.extraPuzzleCount} / ${map.nodes}）。`);
+            state.extraPuzzleSelected = -1;
+          } else {
+            state.extraPuzzleSelected = index;
+            setMessage(`配對不符，改選核心 ${index + 1}。${extraPuzzleText(map)}。`);
+          }
+        }
+      } else if (map.kind === "tide" || index === (state.playthrough === 4 ? map.infectedOrder : map.order)[state.extraPuzzleCount]) {
+        if (map.kind === "tide" && state.extraPuzzleCount === 0) state.extraPuzzleTimer = state.playthrough === 4 ? 14 : 18;
         node.collected = true;
         state.extraPuzzleCount += 1;
         emitParticles(node.x, node.y, map.color, 16, 2.8);
         playSound(500 + state.extraPuzzleCount * 70, 0.12, "sine");
         setMessage(`${extraPuzzleText(map)}（${state.extraPuzzleCount} / ${map.nodes}）`);
       } else {
-        map.puzzleNodes.forEach((item) => { item.collected = false; item.nearby = false; });
+        map.puzzleNodes.forEach((item) => { item.collected = false; });
         state.extraPuzzleCount = 0;
         playSound(120, 0.18, "sawtooth");
-        setMessage(state.playthrough === 4 ? "感染核心順序錯誤，請從最大數字倒數啟動。" : "順序錯誤，解謎重新開始。請依照場景中的光點順序前進。");
+        setMessage(`順序錯誤，重新開始。提示：${extraPuzzleText(map)}。`);
       }
     }
     node.nearby = nearby;
@@ -1335,6 +1446,7 @@ function collectExtraPuzzle() {
   if (state.extraPuzzleCount === map.nodes) {
     state.extraExitUnlocked = true;
     map.exit.unlocked = true;
+    state.extraPuzzleTimer = 0;
     setMessage(`${map.title}解謎完成，出口已解鎖！`);
   }
 }
@@ -1345,6 +1457,8 @@ function enterExtraMap(index) {
   state.extraMap = index;
   state.extraEnemyDefeated = false;
   state.extraPuzzleCount = 0;
+  state.extraPuzzleTimer = 0;
+  state.extraPuzzleSelected = -1;
   state.extraExitUnlocked = false;
   state.dimension = "1D";
   state.modeTimer = 0;
@@ -1355,7 +1469,7 @@ function enterExtraMap(index) {
   map.enemy.attackCooldown = map.enemy.cooldown; map.enemy.active = true;
   map.boss.x = map.boss.startX; map.boss.y = map.boss.startY; map.boss.hp = map.boss.maxHp;
   map.boss.attackCooldown = map.boss.cooldown;
-  map.puzzleNodes.forEach((node) => { node.collected = false; node.nearby = false; });
+  map.puzzleNodes.forEach((node) => { node.collected = false; node.nearby = false; node.level = 0; });
   map.exit.unlocked = false;
   player.x = 120;
   player.y = 370;
@@ -1415,6 +1529,11 @@ function returnDoorUnlocked() {
 }
 
 function enterArenaMode() {
+  const enteringFifth = state.playthrough === 4;
+  if (enteringFifth) {
+    state.playthrough = 5;
+    setEnemyDifficulty(5);
+  }
   state.arenaMode = true;
   state.arenaRestRoom = true;
   state.arenaWave = 0;
@@ -1431,6 +1550,10 @@ function enterArenaMode() {
   restartButton.textContent = "返回正常世界（X）";
   restartButton.disabled = false;
   enterArenaRestRoom();
+  if (enteringFifth) {
+    setMessage("第五周目開始：你回到競技場休息室，挑戰者已消失。從中央門重新挑戰 50 波。");
+    saveGame(false);
+  }
 }
 
 function exitArenaMode() {
@@ -1474,7 +1597,9 @@ function enterArenaRestRoom() {
   player.y = 370;
   player.hp = player.maxHp;
   setMessage(state.arenaFinalBossDefeated
-    ? "第 50 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。"
+    ? state.playthrough === 5 ? "第五周目 50 波已完成。從中央門返回正常世界。" : "第 50 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。"
+    : state.playthrough === 5
+    ? "第五周目競技場：挑戰者不在這裡。右側商人可補給，中央門開始挑戰。"
     : state.playthrough === 2 && state.authorBossDefeated
     ? "已抵達競技場休息室！左側可與挑戰者交談，右側商人可補給，中央門進入三周目。"
     : `已抵達競技場${state.arenaWave === 0 ? "起始" : ""}休息室！可與挑戰者交談、找商人補給，或從中央門繼續挑戰。`);
@@ -1499,7 +1624,7 @@ function restartArenaAfterDeath() {
   player.action = "idle";
   keys.clear();
   enterArenaRestRoom();
-  setMessage("挑戰失敗，已回到起始休息室。裝備、金錢與最高波次已保留；與挑戰者交談或從中央門重新挑戰。");
+  setMessage(state.playthrough === 5 ? "挑戰失敗，已回到第五周目起始休息室。從中央門重新挑戰。" : "挑戰失敗，已回到起始休息室。裝備、金錢與最高波次已保留；與挑戰者交談或從中央門重新挑戰。");
 }
 
 function getChallengerDialogue() {
@@ -1514,7 +1639,7 @@ function getChallengerDialogue() {
 
 function arenaWaveMaxHp(combatant, wave) {
   const base = baseCombatStats.get(combatant).maxHp;
-  const multiplier = state.playthrough === 4 ? 1.85 : state.playthrough === 3 ? 1.45 : state.playthrough === 2 ? 1.3 : 1;
+  const multiplier = state.playthrough === 5 ? 2 : state.playthrough === 4 ? 1.85 : state.playthrough === 3 ? 1.45 : state.playthrough === 2 ? 1.3 : 1;
   return Math.ceil(base * multiplier) + Math.floor((wave - 1) / 10);
 }
 
@@ -1529,9 +1654,9 @@ function getArenaWaveCombatant() {
 function configureArenaCombatant(combatant, wave) {
   const base = baseCombatStats.get(combatant);
   const stage = Math.floor((wave - 1) / 10);
-  const strength = state.playthrough === 4 ? 1.34 : state.playthrough === 3 ? 1.18 : state.playthrough === 2 ? 1.15 : 1;
-  const speed = state.playthrough === 4 ? 1.2 : state.playthrough === 3 ? 1.12 : state.playthrough === 2 ? 1.08 : 1;
-  const cooldown = state.playthrough === 4 ? 0.86 : state.playthrough === 3 ? 0.92 : state.playthrough === 2 ? 0.95 : 1;
+  const strength = state.playthrough === 5 ? 1.4 : state.playthrough === 4 ? 1.34 : state.playthrough === 3 ? 1.18 : state.playthrough === 2 ? 1.15 : 1;
+  const speed = state.playthrough === 5 ? 1.24 : state.playthrough === 4 ? 1.2 : state.playthrough === 3 ? 1.12 : state.playthrough === 2 ? 1.08 : 1;
+  const cooldown = state.playthrough === 5 ? 0.83 : state.playthrough === 4 ? 0.86 : state.playthrough === 3 ? 0.92 : state.playthrough === 2 ? 0.95 : 1;
   combatant.maxHp = arenaWaveMaxHp(combatant, wave);
   combatant.damage = Math.min(2.9, base.damage * strength + stage * 0.12);
   combatant.speed = base.speed * speed * (1 + stage * 0.04);
@@ -1576,7 +1701,11 @@ function advanceArenaAfterDefeat() {
   if (state.arenaBossActive) {
     state.arenaBestWave = Math.max(state.arenaBestWave, state.arenaWave);
     if (state.arenaWave === ARENA_TOTAL_WAVES) {
-      beginArenaFinale();
+      if (state.playthrough === 5) {
+        state.arenaFinalBossDefeated = true;
+        state.arenaBossActive = false;
+        enterArenaRestRoom();
+      } else beginArenaFinale();
       return;
     }
     enterArenaRestRoom();
@@ -1838,7 +1967,7 @@ function interact() {
       setMessage("對話結束。從中央門繼續挑戰。");
     } else if (state.elevatorMode) {
       setMessage(`電梯正在上升：第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波，擊敗 5 名敵人。`);
-    } else if (state.arenaRestRoom && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
+    } else if (state.arenaRestRoom && state.playthrough !== 5 && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
       state.challengerDialogOpen = true;
       setMessage("挑戰者正在和你說話，按 F 關閉對話框。");
     } else if (state.arenaRestRoom && distanceToMerchant() < 90) {
@@ -1854,7 +1983,9 @@ function interact() {
       spawnNextArenaWave();
     } else if (state.arenaRestRoom) {
       setMessage(state.arenaFinalBossDefeated
-        ? "挑戰已完成。與挑戰者交談，或前往中央門按 F 返回正常世界。"
+        ? state.playthrough === 5 ? "挑戰已完成。前往中央門按 F 返回正常世界。" : "挑戰已完成。與挑戰者交談，或前往中央門按 F 返回正常世界。"
+        : state.playthrough === 5
+        ? "挑戰者已消失。前往中央門按 F 開始第五周目競技場挑戰。"
         : state.playthrough === 2 && state.authorBossDefeated
         ? "與左側挑戰者對話，或前往中央三周目之門按 F。"
         : "與左側挑戰者對話，或前往中央門按 F 開始挑戰。");
@@ -1916,7 +2047,7 @@ function interact() {
       voidBoss.active = false;
       enterExtraMap(1);
     } else if (!voidExit.unlocked) {
-      setMessage("最終出口被虛空封印，先擊敗虛空君王。");
+      setMessage(state.voidBossDefeated ? "進入 2D，站在虛空錨點內 3 秒。" : "最終出口被虛空封印，先擊敗虛空君王。");
     } else {
       setMessage("靠近最終出口後按 F。");
     }
@@ -1932,6 +2063,7 @@ function interact() {
       projectiles.length = 0;
       frostEnemies.forEach((enemy) => { enemy.active = false; });
       state.voidBossDefeated = false;
+      state.voidCharge = 0;
       voidExit.unlocked = false;
       Object.assign(voidBoss, {
         x: voidBoss.startX, y: voidBoss.startY, hp: voidBoss.maxHp,
@@ -1944,7 +2076,7 @@ function interact() {
     } else if (!frostExit.unlocked) {
       setMessage(state.frostDefeated < frostEnemies.length
         ? "冰封出口鎖定中，先擊敗裂谷中的敵人。"
-        : "冰封出口鎖定中，進入 2D 維度收集三枚寒霜印記。");
+        : `冰封出口鎖定中，進入 2D 依 ${state.playthrough === 4 ? "3 → 2 → 1" : "2 → 1 → 3"} 取得印記。`);
     } else {
       setMessage("靠近冰封出口後按 F。");
     }
@@ -2216,9 +2348,10 @@ function useSpecialItem(item) {
   } else if (item === "compass") {
     if (player.compasses <= 0) { setMessage("你沒有解謎羅盤，先到商人處購買。"); return; }
     const map = currentExtraMap();
-    const target = map ? map.puzzleNodes[state.playthrough === 4 ? map.nodes - 1 - state.extraPuzzleCount : state.extraPuzzleCount]
+    const target = map ? extraPuzzleTarget(map)
       : state.nextMap ? ruinRunes[(state.playthrough === 4 ? INFECTED_RUNE_SEQUENCE : RUIN_RUNE_SEQUENCE)[state.ruinRuneCount]]
-      : state.frostMap ? frostSeals.find((seal) => !seal.collected)
+      : state.frostMap ? frostSeals[(state.playthrough === 4 ? [2, 1, 0] : [1, 0, 2]).find((index) => !frostSeals[index].collected)]
+      : state.voidMap && state.voidBossDefeated && !voidExit.unlocked ? voidAnchor
       : null;
     if (!target) { setMessage("羅盤沒有偵測到未完成的解謎目標。"); return; }
     player.compasses -= 1;
@@ -2519,7 +2652,7 @@ function activateNextFrostEnemy() {
     next.active = true;
     setMessage(`${current.type} 被擊敗！${next.type} 從冰霧中現身。`);
   } else {
-    setMessage("裂谷敵人已全部擊敗！進入 2D 維度收集三枚寒霜印記。 ");
+    setMessage(`裂谷敵人已全部擊敗！進入 2D，依 ${state.playthrough === 4 ? "3 → 2 → 1" : "2 → 1 → 3"} 取得印記。`);
   }
 }
 
@@ -2550,7 +2683,8 @@ function update(dt) {
     collectRuinRunes();
     collectSanctumShards();
     collectFrostSeals();
-    collectExtraPuzzle();
+    chargeVoidAnchor(dt);
+    collectExtraPuzzle(dt);
   }
 
   state.attackTimer = Math.max(0, state.attackTimer - dt);
@@ -2623,9 +2757,9 @@ function update(dt) {
     } else if (state.voidMap && voidBoss.hp <= 0 && voidBoss.active) {
       voidBoss.active = false;
       state.voidBossDefeated = true;
-      voidExit.unlocked = true;
+      state.voidCharge = 0;
       player.money += 200;
-      setMessage("虛空君王被擊敗！獲得 200 金，最終出口已開啟。");
+      setMessage("虛空君王被擊敗！獲得 200 金。進入 2D，站在虛空錨點內 3 秒穩定封印。");
     } else if (state.frostMap) {
       activateNextFrostEnemy();
     } else if (state.sanctumMap && sanctumEnemy.hp <= 0 && sanctumEnemy.active) {
@@ -2910,7 +3044,7 @@ function drawBackground() {
   const extra = currentExtraMap();
   if (extra) {
     drawText(`第${extra.index + 5}張地圖：${extra.title}`, 24, 105, 14, extra.color);
-    drawText(!state.extraEnemyDefeated ? `擊敗 ${extra.enemy.type}` : extra.boss.hp > 0 ? `擊敗 ${extra.boss.type}` : `${extraPuzzleText(extra)}（${state.extraPuzzleCount} / ${extra.nodes}）`, 24, 130, 13, "#d7e6e8");
+    drawText(!state.extraEnemyDefeated ? `擊敗 ${extra.enemy.type}` : extra.boss.hp > 0 ? `擊敗 ${extra.boss.type}` : `${extraPuzzleText(extra)}（${state.extraPuzzleCount} / ${extra.nodes}）${extra.kind === "tide" && state.extraPuzzleTimer > 0 ? `・剩 ${Math.ceil(state.extraPuzzleTimer)} 秒` : ""}`, 24, 130, 13, "#d7e6e8");
     if (twoD) {
       ctx.strokeStyle = `${extra.color}55`;
       ctx.lineWidth = 1;
@@ -2920,14 +3054,15 @@ function drawBackground() {
         ctx.save();
         ctx.translate(node.x, node.y);
         ctx.rotate(Math.PI / 4);
-        ctx.shadowColor = node.collected ? extra.color : "transparent";
-        ctx.shadowBlur = node.collected ? 18 : 0;
-        ctx.fillStyle = node.collected ? extra.color : "#34394b";
+        const highlighted = node.collected || state.extraPuzzleSelected === index && extra.kind === "pairs";
+        ctx.shadowColor = highlighted ? extra.color : "transparent";
+        ctx.shadowBlur = highlighted ? 18 : 0;
+        ctx.fillStyle = highlighted ? extra.color : "#34394b";
         ctx.fillRect(-14, -14, 28, 28);
         ctx.fillStyle = node.collected ? "#ffffff" : "#a8acc2";
         ctx.fillRect(-5, -5, 10, 10);
         ctx.restore();
-        drawText(`${index + 1}`, node.x, node.y + 5, 12, node.collected ? "#08111b" : "#d7e6e8", "center");
+        drawText(extra.kind === "fire" ? `${node.level}/${fireTargets()[index]}` : extra.kind === "gears" ? `${node.level}/${state.playthrough === 4 ? 2 : 1}` : `${index + 1}`, node.x, node.y + 5, 12, node.collected ? "#08111b" : "#d7e6e8", "center");
       });
     } else {
       ctx.fillStyle = `${extra.color}aa`;
@@ -2939,7 +3074,14 @@ function drawBackground() {
   }
   if (state.voidMap) {
     drawText("第五張地圖：虛空王座", 24, 105, 14, "#c6a7ff");
-    drawText(state.voidBossDefeated ? "虛空君王已被擊敗" : "終局 Boss：虛空君王", 24, 130, 13, "#a987e8");
+    drawText(state.voidBossDefeated ? `進入 2D，站在錨點內穩定封印（${state.voidCharge.toFixed(1)} / 3 秒）` : "終局 Boss：虛空君王", 24, 130, 13, "#a987e8");
+    if (state.voidBossDefeated && twoD) {
+      drawGlow(voidAnchor.x, voidAnchor.y, voidAnchor.radius + 12, "#b58cff", 0.5);
+      ctx.strokeStyle = "#e4c8ff";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(voidAnchor.x, voidAnchor.y, voidAnchor.radius, 0, Math.PI * 2); ctx.stroke();
+      drawText("虛空錨點", voidAnchor.x, voidAnchor.y + 5, 14, "#f4e6ff", "center");
+    }
     ctx.fillStyle = "#6c45a8";
     ctx.fillRect(0, 382, W, 6);
     drawPortal(voidExit.x, voidExit.y, voidExit.unlocked, "#b58cff");
@@ -2948,7 +3090,7 @@ function drawBackground() {
   }
   if (state.frostMap) {
     drawText("第四張地圖：冰封裂谷", 24, 105, 14, "#b9f3ff");
-    drawText(state.frostDefeated < frostEnemies.length ? "擊敗裂谷敵人" : "進入 2D 收集寒霜印記", 24, 130, 13, "#91cadb");
+    drawText(state.frostDefeated < frostEnemies.length ? "擊敗裂谷敵人" : `進入 2D，依 ${state.playthrough === 4 ? "3 → 2 → 1" : "2 → 1 → 3"} 取得寒霜印記`, 24, 130, 13, "#91cadb");
     drawText(`寒霜印記：${state.frostSealCount} / ${frostSeals.length}`, 760, 130, 13, "#b9f3ff");
     if (twoD) {
       ctx.strokeStyle = "#2f7189";
@@ -3425,8 +3567,8 @@ function getCurrentObjective() {
   if (state.cutscenePhase) return "劇情進行中";
   if (state.elevatorMode) return `電梯第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波：敵人 ${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`;
   if (state.caveMode) return state.remoteTradeUnlocked ? "洞穴：H 商店、G 賭桌；左側出口按 F" : "靠近倖存者並按 F 取得補給能力";
-  if (state.arenaRestRoom && state.arenaFinalBossDefeated) return "競技場完成：與挑戰者對話或從中央門返回";
-  if (state.arenaRestRoom) return state.playthrough === 2 && state.authorBossDefeated
+  if (state.arenaRestRoom && state.arenaFinalBossDefeated) return state.playthrough === 5 ? "第五周目競技場完成：從中央門返回" : "競技場完成：與挑戰者對話或從中央門返回";
+  if (state.arenaRestRoom) return state.playthrough === 5 ? "第五周目休息室：商人補給、中央門挑戰" : state.playthrough === 2 && state.authorBossDefeated
     ? "休息室：挑戰者對話、商人補給、中央門進三周目"
     : "休息室：挑戰者對話、商人補給、中央門挑戰";
   if (state.arenaMode) return state.arenaBossActive
@@ -3446,11 +3588,11 @@ function getCurrentObjective() {
     return "前往出口並按 F";
   }
   if (state.voidMap) {
-    return state.voidBossDefeated ? "前往最終出口並按 F" : "擊敗 Boss：虛空君王";
+    return !state.voidBossDefeated ? "擊敗 Boss：虛空君王" : voidExit.unlocked ? "前往最終出口並按 F" : "進入 2D，站在虛空錨點內 3 秒";
   }
   if (state.frostMap) {
     if (state.frostDefeated < frostEnemies.length) return `擊敗裂谷敵人（${state.frostDefeated} / ${frostEnemies.length}）`;
-    if (state.frostSealCount < frostSeals.length) return `收集寒霜印記（${state.frostSealCount} / ${frostSeals.length}）`;
+    if (state.frostSealCount < frostSeals.length) return `依 ${state.playthrough === 4 ? "3 → 2 → 1" : "2 → 1 → 3"} 取得寒霜印記（${state.frostSealCount} / ${frostSeals.length}）`;
     return "前往冰封出口並按 F";
   }
   if (state.sanctumMap) {
@@ -3484,7 +3626,10 @@ function drawObjective() {
   ctx.lineWidth = 2;
   ctx.strokeRect(18, 148, 300, 48);
   drawText("目前目標", 30, 167, 12, "#f4d18d");
-  drawText(objective, 30, 186, 13, "#f4f0df");
+  ctx.font = '13px "Microsoft JhengHei", sans-serif';
+  ctx.fillStyle = "#f4f0df";
+  ctx.textAlign = "left";
+  ctx.fillText(objective, 30, 186, 275);
 }
 
 function drawHud() {
@@ -3498,7 +3643,7 @@ function drawHud() {
   drawText(`維度：${state.dimension}`, 24, 30, 18, state.dimension === "2D" ? "#79d3c9" : "#c3c8ed");
   const extra = currentExtraMap();
   const mapLabel = state.caveMode ? "倖存者洞穴" : state.elevatorMode ? "上升電梯" : state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : state.playthrough === 4 ? "第一世界" : "地圖 1";
-  drawText(`${mapLabel}${state.playthrough === 4 ? "・四周目" : state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
+  drawText(`${mapLabel}${state.playthrough === 5 ? "・五周目" : state.playthrough === 4 ? "・四周目" : state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
   const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
   const swordStatus = state.swordCooldown > 0 ? `${state.swordCooldown.toFixed(1)}s` : "可用";
@@ -3626,7 +3771,7 @@ function drawSurvivor() {
 }
 
 function drawChallenger() {
-  if (!state.arenaRestRoom) return;
+  if (!state.arenaRestRoom || state.playthrough === 5) return;
   ctx.fillStyle = "#07091266";
   ctx.beginPath(); ctx.ellipse(challenger.x, challenger.y + 20, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#345b84";
@@ -3641,7 +3786,7 @@ function drawChallenger() {
 }
 
 function drawChallengerDialog() {
-  if (!state.arenaRestRoom || !state.challengerDialogOpen) return;
+  if (!state.arenaRestRoom || state.playthrough === 5 || !state.challengerDialogOpen) return;
   const words = Array.from(getChallengerDialogue().replace(/^挑戰者：/, ""));
   const lines = [words.slice(0, 32).join(""), words.slice(32).join("")].filter(Boolean);
   ctx.save();

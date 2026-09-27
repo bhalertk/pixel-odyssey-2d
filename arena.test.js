@@ -210,6 +210,95 @@ function defeatCurrent(game) {
 
 {
   const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); state.voidMap = true; state.voidBossDefeated = true; voidBoss.hp = 0; state.dimension = '2D'; player.x = voidAnchor.x; player.y = voidAnchor.y; chargeVoidAnchor(1.5)");
+  assert.equal(game.run("voidExit.unlocked"), false);
+  game.run("saveGame(false); loadGame(); chargeVoidAnchor(1.5)");
+  assert.equal(game.run("voidExit.unlocked"), true);
+  game.run("state.voidMap = false; state.frostMap = true; state.frostDefeated = 2; state.dimension = '2D'; player.x = frostSeals[0].x; player.y = frostSeals[0].y; collectFrostSeals()");
+  assert.equal(game.run("state.frostSealCount"), 0);
+  for (const index of [1, 0, 2]) game.run(`player.x = frostSeals[${index}].x; player.y = frostSeals[${index}].y; collectFrostSeals()`);
+  assert.equal(game.run("frostExit.unlocked"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.frostMap = true; state.frostDefeated = 2; state.dimension = '2D'");
+  for (const index of [2, 1, 0]) game.run(`player.x = frostSeals[${index}].x; player.y = frostSeals[${index}].y; collectFrostSeals()`);
+  assert.equal(game.run("frostExit.unlocked"), true);
+  game.run("enterExtraMap(2); currentExtraMap().boss.hp = 0; state.dimension = '2D'");
+  for (const index of [0, 2, 0, 2]) game.run(`player.x = currentExtraMap().puzzleNodes[${index}].x; player.y = currentExtraMap().puzzleNodes[${index}].y; collectExtraPuzzle(); player.x = 120; player.y = 370; collectExtraPuzzle()`);
+  assert.equal(game.run("state.extraExitUnlocked"), true);
+  game.run("enterExtraMap(4); currentExtraMap().boss.hp = 0; state.dimension = '2D'");
+  for (const index of [0, 0, 1, 2, 2]) {
+    game.run(`player.x = currentExtraMap().puzzleNodes[${index}].x; player.y = currentExtraMap().puzzleNodes[${index}].y; collectExtraPuzzle(); player.x = 120; player.y = 370; collectExtraPuzzle()`);
+  }
+  assert.equal(game.run("state.extraExitUnlocked"), true);
+  game.run("enterExtraMap(6); currentExtraMap().boss.hp = 0; state.dimension = '2D'");
+  for (const index of [0, 3, 1, 4, 2, 5]) game.run(`player.x = currentExtraMap().puzzleNodes[${index}].x; player.y = currentExtraMap().puzzleNodes[${index}].y; collectExtraPuzzle()`);
+  assert.equal(game.run("state.extraExitUnlocked"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); enterExtraMap(3); currentExtraMap().boss.hp = 0; state.dimension = '2D'; player.x = currentExtraMap().puzzleNodes[2].x; player.y = currentExtraMap().puzzleNodes[2].y; collectExtraPuzzle(); collectExtraPuzzle(3); saveGame(false)");
+  game.run("loadGame()");
+  assert.equal(game.run("state.extraPuzzleCount"), 1);
+  assert.equal(game.run("state.extraPuzzleTimer"), 15);
+  game.run("enterExtraMap(5); currentExtraMap().boss.hp = 0; state.dimension = '2D'; player.x = currentExtraMap().puzzleNodes[0].x; player.y = currentExtraMap().puzzleNodes[0].y; collectExtraPuzzle(); saveGame(false)");
+  const saved = JSON.parse(game.storage.get("pixel-odyssey-2d-save"));
+  delete saved.extraMaps[4].levels;
+  game.storage.set("pixel-odyssey-2d-save", JSON.stringify(saved));
+  game.run("loadGame()");
+  assert.equal(game.run("state.extraPuzzleCount"), 0);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); enterExtraMap(1); currentExtraMap().boss.hp = 0; state.dimension = '2D'; player.x = currentExtraMap().puzzleNodes[1].x; player.y = currentExtraMap().puzzleNodes[1].y; collectExtraPuzzle(); saveGame(false); loadGame()");
+  assert.equal(game.run("state.extraPuzzleSelected"), 1);
+  game.run("state.dimension = '2D'; player.x = currentExtraMap().puzzleNodes[2].x; player.y = currentExtraMap().puzzleNodes[2].y; collectExtraPuzzle(); player.x = currentExtraMap().puzzleNodes[0].x; player.y = currentExtraMap().puzzleNodes[0].y; collectExtraPuzzle()");
+  assert.equal(game.run("state.extraExitUnlocked"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame()");
+  const paths = [[0, 2, 1], [0, 2], null, null, [0, 2, 4, 1, 3], [0, 5, 1, 4, 2, 3]];
+  for (let mapNumber = 1; mapNumber <= 6; mapNumber += 1) {
+    game.run(`enterExtraMap(${mapNumber}); currentExtraMap().boss.hp = 0; state.dimension = '2D'`);
+    if (mapNumber === 3) {
+      game.run("player.x = currentExtraMap().puzzleNodes[0].x; player.y = currentExtraMap().puzzleNodes[0].y; collectExtraPuzzle(); collectExtraPuzzle(19)");
+      assert.equal(game.run("state.extraPuzzleCount"), 0);
+      game.run("player.x = 120; player.y = 370; collectExtraPuzzle()");
+    }
+    const order = paths[mapNumber - 1] || Array.from({ length: mapNumber === 6 ? 6 : mapNumber === 3 ? 4 : 3 }, (_, i) => i);
+    for (const index of order) {
+      if (mapNumber === 4 && index === 1) game.run("player.x = currentExtraMap().puzzleNodes[1].x; player.y = currentExtraMap().puzzleNodes[1].y; collectExtraPuzzle(); player.x = 120; player.y = 370; collectExtraPuzzle()");
+      game.run(`player.x = currentExtraMap().puzzleNodes[${index}].x; player.y = currentExtraMap().puzzleNodes[${index}].y; collectExtraPuzzle()`);
+    }
+    assert.equal(game.run("state.extraExitUnlocked"), true, `map ${mapNumber}`);
+    game.run("saveGame(false); loadGame()");
+    assert.equal(game.run("currentExtraMap().exit.unlocked"), true, `saved map ${mapNumber}`);
+  }
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.worldReturned = true; interact()");
+  assert.equal(game.run("state.playthrough"), 5);
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom"), true);
+  game.run("player.x = challenger.x; interact()");
+  assert.equal(game.run("state.challengerDialogOpen"), false);
+  game.run("saveGame(false); loadGame(); draw()");
+  assert.equal(game.run("state.playthrough"), 5);
+  assert.equal(game.run("state.challengerDialogOpen"), false);
+  game.run("state.arenaWave = 50; state.arenaBossActive = true; advanceArenaAfterDefeat()");
+  assert.equal(game.run("state.cutscenePhase"), "");
+  assert.equal(game.run("state.arenaRestRoom && state.arenaFinalBossDefeated"), true);
+}
+
+{
+  const game = createGame();
   game.run("audioSettings.enabled = false; startNewGame()");
   game.touch("d", "pointerdown");
   assert.equal(game.run("keys.has('d')"), true);
@@ -297,4 +386,4 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.cutscenePhase"), "author");
 }
 
-console.log("Arena, finale, direct fourth playthrough, infection cave, mobile controls, puzzles, and save/load passed.");
+console.log("Arena, finale, fourth and fifth playthroughs, infection cave, mobile controls, world puzzles, and save/load passed.");
