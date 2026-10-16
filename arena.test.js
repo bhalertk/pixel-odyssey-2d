@@ -152,14 +152,10 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.arenaMode"), false);
   assert.equal(game.run("mainMenu.hidden"), true);
   assert.equal(game.run("gameContent.hidden"), false);
-  assert.equal(game.run("mainMenu.dataset.playthrough"), "4");
-  assert.equal(game.run("startFourthButton.hidden"), false);
-  assert.equal(game.storage.get("pixel-odyssey-2d-fourth-unlocked"), "1");
-  assert.equal(game.storage.get("pixel-odyssey-2d-fourth-entered"), "1");
+  assert.equal(fs.readFileSync("index.html", "utf8").includes('id="start-fourth"'), false);
+  assert.equal(JSON.parse(game.storage.get("pixel-odyssey-2d-save")).state.playthrough, 4);
   const reloaded = createGame(game.storage);
-  assert.equal(reloaded.run("startFourthButton.hidden"), false);
-  assert.equal(reloaded.run("mainMenu.dataset.playthrough"), "4");
-  reloaded.run("enterFourthPlaythrough()");
+  reloaded.run("loadGame()");
   assert.equal(reloaded.run("state.playthrough"), 4);
   assert.equal(reloaded.run("inFirstMap()"), true);
 }

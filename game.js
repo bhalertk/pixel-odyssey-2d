@@ -26,7 +26,6 @@ const clearSaveButton = document.querySelector("#clear-save");
 const mainMenu = document.querySelector("#main-menu");
 const gameContent = document.querySelector("#game-content");
 const startGameButton = document.querySelector("#start-game");
-const startFourthButton = document.querySelector("#start-fourth");
 const menuLoadSaveButton = document.querySelector("#menu-load-save");
 const menuBodyColorInput = document.querySelector("#menu-body-color");
 const menuEyeColorInput = document.querySelector("#menu-eye-color");
@@ -863,7 +862,6 @@ function clearSave() {
     localStorage.removeItem(SAVE_KEY);
     localStorage.removeItem(FOURTH_UNLOCK_KEY);
     localStorage.removeItem(FOURTH_ENTERED_KEY);
-    refreshFourthMenu();
     setMessage("存檔已清除。");
   } catch (error) {
     setMessage("無法清除存檔，請檢查瀏覽器儲存權限。");
@@ -1015,39 +1013,6 @@ function startNewGame() {
   beardInput.checked = player.beard;
   glassesInput.checked = player.glasses;
   showGame();
-}
-
-function refreshFourthMenu(forceUnlocked = false) {
-  let unlocked = forceUnlocked;
-  let entered = false;
-  try {
-    unlocked ||= localStorage.getItem(FOURTH_UNLOCK_KEY) === "1";
-    entered = localStorage.getItem(FOURTH_ENTERED_KEY) === "1";
-    if (!entered) entered = JSON.parse(localStorage.getItem(SAVE_KEY))?.state?.playthrough === 4;
-    unlocked ||= entered;
-  } catch (error) { entered = state.playthrough === 4; }
-  startFourthButton.hidden = !unlocked;
-  mainMenu.dataset.playthrough = entered ? "4" : "1";
-}
-
-function enterFourthPlaythrough() {
-  let savedState;
-  try { savedState = JSON.parse(localStorage.getItem(SAVE_KEY))?.state; } catch (error) { /* A fresh fourth run is still possible. */ }
-  if (savedState?.playthrough === 4) {
-    showGame();
-    if (loadGame()) {
-      try { localStorage.setItem(FOURTH_ENTERED_KEY, "1"); } catch (error) { /* The current session still works. */ }
-      refreshFourthMenu(true);
-      return;
-    }
-  }
-  if (!state.elevatorCompleted && savedState?.elevatorCompleted) {
-    showGame();
-    loadGame();
-  }
-  startPlaythrough(4);
-  try { localStorage.setItem(FOURTH_ENTERED_KEY, "1"); } catch (error) { /* The current session still works. */ }
-  refreshFourthMenu(true);
 }
 
 function playSound(frequency, duration = 0.08, type = "square") {
@@ -1839,10 +1804,7 @@ function finishElevator() {
   state.cutscenePhase = "";
   state.elevatorMode = false;
   state.elevatorCompleted = true;
-  try { localStorage.setItem(FOURTH_UNLOCK_KEY, "1"); } catch (error) { /* The current session still unlocks. */ }
   startPlaythrough(4);
-  try { localStorage.setItem(FOURTH_ENTERED_KEY, "1"); } catch (error) { /* The current session still works. */ }
-  refreshFourthMenu(true);
   setMessage("電梯頂端的光吞沒主角。四周目開始，神秘物質已感染這個世界！");
 }
 
@@ -4147,7 +4109,6 @@ restartButton.addEventListener("click", () => {
 loadSaveButton.addEventListener("click", loadGame);
 clearSaveButton.addEventListener("click", clearSave);
 startGameButton.addEventListener("click", startNewGame);
-startFourthButton.addEventListener("click", enterFourthPlaythrough);
 menuLoadSaveButton.addEventListener("click", () => {
   let hasSave = false;
   try {
@@ -4177,6 +4138,5 @@ volumeInput.addEventListener("input", () => {
   saveAudioSettings();
 });
 loadAudioSettings();
-refreshFourthMenu();
 
 setInterval(() => loop(performance.now()), 16);
