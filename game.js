@@ -21,6 +21,7 @@ const shop = document.querySelector("#shop");
 const betting = document.querySelector("#betting");
 const betAmountInput = document.querySelector("#bet-amount");
 const restartButton = document.querySelector("#restart");
+const touchRestartButton = document.querySelector('[data-control="x"]');
 const loadSaveButton = document.querySelector("#load-save");
 const clearSaveButton = document.querySelector("#clear-save");
 const mainMenu = document.querySelector("#main-menu");
@@ -46,12 +47,13 @@ const SHOP_BASE_PRICES = { armor: 45, potion: 30, weapon: 75, bow: 110, staff: 1
 const SHOP_ITEM_NAMES = { armor: "防具", potion: "生命藥水", weapon: "強化武器", bow: "光能弓", staff: "虛空法杖", power: "狂戰藥水", boots: "迅捷靴", bomb: "星塵炸彈", compass: "解謎羅盤", core: "護盾晶核" };
 const SECRET_SEQUENCE = "AAWWDDSS";
 const THIRD_SEQUENCE = "DDDWWWAAASSSAWDS";
-const ARENA_FIFTY_SEQUENCE = "AWDSAWDSAWDS";
+const ARENA_FINAL_SEQUENCE = "AWDSAWDSAWDS";
 const MONEY_SEQUENCE = "AWDSSDWASSDWASSADWSS";
-const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, ARENA_FIFTY_SEQUENCE.length, MONEY_SEQUENCE.length);
+const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, ARENA_FINAL_SEQUENCE.length, MONEY_SEQUENCE.length);
 const DIMENSION_COOLDOWN = 5;
 const AUTHOR_INTRO_DURATION = 3.5;
-const ARENA_TOTAL_WAVES = 50;
+const AUTHOR_RIFT_COLUMNS = [145, 275, 405, 535, 665, 795];
+const ARENA_TOTAL_WAVES = 30;
 const ARENA_ENEMIES_PER_WAVE = 5;
 const ELEVATOR_TOTAL_WAVES = 5;
 const ELEVATOR_ENEMIES_PER_WAVE = 5;
@@ -252,6 +254,13 @@ const allCombatants = [
   ...extraMaps.flatMap((map) => [map.enemy, map.boss]), ...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss,
   trueFinalBoss, authorBoss, infectedMerchant,
 ];
+const attackStyleCounts = new Map();
+allCombatants.forEach((enemy) => {
+  const attackType = enemy.attackType || "melee";
+  const style = attackStyleCounts.get(attackType) || 0;
+  enemy.attackStyle = style;
+  attackStyleCounts.set(attackType, style + 1);
+});
 const baseCombatStats = new Map(allCombatants.map((enemy) => [enemy, {
   maxHp: enemy.maxHp, damage: enemy.damage || 1, speed: enemy.speed, cooldown: enemy.cooldown,
   color: enemy.color, size: enemy.size,
@@ -275,6 +284,7 @@ function setEnemyDifficulty(playthrough) {
     enemy.attackCooldown = enemy.cooldown;
   });
   const infected = playthrough === 4;
+  authorBoss.type = infected ? "真・最終 Boss：異變作者" : "真・最終 Boss：作者";
   [[220, 170], [470, 130], [740, 220]].forEach(([x, y], index) => {
     shards[index].x = infected ? [760, 180, 465][index] : x;
     shards[index].y = infected ? [155, 260, 130][index] : y;
@@ -602,13 +612,13 @@ function loadGame() {
     state.arenaMode = Boolean(save.state.arenaMode);
     state.arenaRestRoom = state.arenaMode && Boolean(save.state.arenaRestRoom);
     state.arenaWave = state.arenaMode && Number.isFinite(save.state.arenaWave)
-      ? Math.max(state.arenaRestRoom ? 0 : 1, Math.min(50, Math.floor(save.state.arenaWave))) : 0;
+      ? Math.max(state.arenaRestRoom ? 0 : 1, Math.min(ARENA_TOTAL_WAVES, Math.floor(save.state.arenaWave))) : 0;
     state.arenaKillsThisWave = Number.isFinite(save.state.arenaKillsThisWave)
-      ? Math.max(0, Math.min(5, Math.floor(save.state.arenaKillsThisWave)))
-      : save.state.arenaBossActive ? 5 : 0;
+      ? Math.max(0, Math.min(ARENA_ENEMIES_PER_WAVE, Math.floor(save.state.arenaKillsThisWave)))
+      : save.state.arenaBossActive ? ARENA_ENEMIES_PER_WAVE : 0;
     state.arenaBossActive = state.arenaMode && !state.arenaRestRoom
       && state.arenaWave > 0 && state.arenaWave % 5 === 0
-      && state.arenaKillsThisWave === 5 && Boolean(save.state.arenaBossActive);
+      && state.arenaKillsThisWave === ARENA_ENEMIES_PER_WAVE && Boolean(save.state.arenaBossActive);
     state.arenaFinalBossDefeated = Boolean(save.state.arenaFinalBossDefeated);
     state.arenaBestWave = Number.isFinite(save.state.arenaBestWave)
       ? Math.max(0, Math.floor(save.state.arenaBestWave)) : 0;
@@ -626,6 +636,17 @@ function loadGame() {
     state.elevatorHeight = Number.isFinite(save.state.elevatorHeight)
       ? Math.max(0, save.state.elevatorHeight) : 0;
     state.elevatorCompleted = Boolean(save.state.elevatorCompleted);
+    if (state.arenaMode && (save.state.arenaWave > ARENA_TOTAL_WAVES
+      || save.state.arenaWave === ARENA_TOTAL_WAVES && state.arenaRestRoom)
+      && !state.arenaFinalBossDefeated && !state.cutscenePhase && !state.elevatorMode) {
+      state.arenaRestRoom = true;
+      state.arenaWave = ARENA_TOTAL_WAVES - 1;
+      state.arenaKillsThisWave = 0;
+      state.arenaBossActive = false;
+      state.arenaBestWave = Math.min(state.arenaBestWave, ARENA_TOTAL_WAVES - 1);
+      player.x = 150;
+      player.y = 370;
+    }
     state.merchantDefeated = state.playthrough === 4 && Boolean(save.state.merchantDefeated);
     state.caveMode = state.playthrough === 4 && Boolean(save.state.caveMode) && state.merchantDefeated;
     state.remoteTradeUnlocked = state.playthrough === 4 && Boolean(save.state.remoteTradeUnlocked);
@@ -661,7 +682,8 @@ function loadGame() {
     restoreCombatant(trueFinalBoss, save.trueFinalBoss);
     restoreCombatant(authorBoss, save.authorBoss);
     authorBoss.patternIndex = Number.isFinite(save.authorBoss?.patternIndex) ? Math.max(0, save.authorBoss.patternIndex) : 0;
-    authorBoss.attackPattern = ["fan", "lanes", "ring", "flip"].includes(save.authorBoss?.attackPattern) ? save.authorBoss.attackPattern : "fan";
+    const authorPatterns = state.playthrough === 4 ? ["fan", "lanes", "ring", "flip", "rift", "echo"] : ["fan", "lanes", "ring", "flip"];
+    authorBoss.attackPattern = authorPatterns.includes(save.authorBoss?.attackPattern) ? save.authorBoss.attackPattern : "fan";
     authorBoss.safeLane = Number.isInteger(save.authorBoss?.safeLane) ? Math.max(0, Math.min(5, save.authorBoss.safeLane)) : 0;
     authorBoss.attackTargetX = Number.isFinite(save.authorBoss?.attackTargetX) ? save.authorBoss.attackTargetX : player.x;
     authorBoss.attackTargetY = Number.isFinite(save.authorBoss?.attackTargetY) ? save.authorBoss.attackTargetY : player.y;
@@ -715,7 +737,8 @@ function loadGame() {
     state.screenFlipTimer = state.authorRevealed && !state.authorBossDefeated && Number.isFinite(save.state.screenFlipTimer)
       ? Math.max(0, Math.min(4, save.state.screenFlipTimer)) : 0;
     state.trueFinalExitEntered = state.playthrough >= 2 && Boolean(save.state.trueFinalExitEntered);
-    if (state.playthrough >= 2 && state.worldReturned && (!state.trueFinalExitEntered || !state.authorBossDefeated)) {
+    if (state.playthrough >= 2 && state.worldReturned && !state.arenaMode
+      && (!state.trueFinalExitEntered || !state.authorBossDefeated)) {
       // Older saves could end the second playthrough before the author encounter existed.
       state.worldReturned = false;
       state.trueFinalMap = true;
@@ -832,8 +855,7 @@ function loadGame() {
       && infectedMerchant.hp > 0;
     shop.hidden = true;
     betting.hidden = true;
-    restartButton.textContent = state.elevatorMode ? "重新挑戰電梯（X）"
-      : state.arenaMode ? "返回正常世界（X）" : "重新開始（X）";
+    syncRestartControl();
     restartButton.disabled = Boolean(state.cutscenePhase);
     const savedDate = save.savedAt ? new Date(save.savedAt) : null;
     const savedLabel = savedDate && !Number.isNaN(savedDate.getTime())
@@ -842,6 +864,11 @@ function loadGame() {
     if (state.playthrough === 1 && state.worldReturned && state.voidBossDefeated && !legacyEnding) {
       startSecondPlaythrough();
       setMessage("已讀取第一周目通關存檔，二周目已開始。裝備、道具與金錢已保留。");
+      return true;
+    }
+    if ((state.playthrough === 2 || state.playthrough === 4) && state.authorBossDefeated
+      && (state.trueFinalMap || state.playthrough === 4 && state.worldReturned && !state.arenaMode)) {
+      enterArenaAfterAuthor();
       return true;
     }
     if (state.playthrough === 3 && state.arenaMode && state.arenaRestRoom
@@ -982,8 +1009,8 @@ function resetGame() {
   floatingTexts.length = 0;
   shop.hidden = true;
   betting.hidden = true;
-  restartButton.textContent = "重新開始（X）";
   restartButton.disabled = false;
+  syncRestartControl();
   setMessage("遊戲已重新開始。盾牌可直接按 E 使用；前往老人身邊按 F 開始教學。");
 }
 
@@ -1039,6 +1066,7 @@ function distanceToMerchant() {
 }
 
 function canTrade() {
+  if (state.playthrough === 5 && state.arenaMode) return false;
   if (state.playthrough === 4) return state.remoteTradeUnlocked
     || (state.caveMode && Math.hypot(player.x - survivor.x, player.y - survivor.y) < 90);
   return (!state.arenaMode || state.arenaRestRoom) && distanceToMerchant() < 90;
@@ -1046,7 +1074,7 @@ function canTrade() {
 
 function toggleShop() {
   if (!canTrade()) {
-    setMessage(state.playthrough === 4 ? "感染商人無法交易。擊敗他並進入洞穴尋找倖存者。" : "商人離你太遠了。");
+    setMessage(state.playthrough === 5 && state.arenaMode ? "五周目競技場的商人已消失。" : state.playthrough === 4 ? "感染商人無法交易。擊敗他並進入洞穴尋找倖存者。" : "商人離你太遠了。");
     return;
   }
   updateShopPrices();
@@ -1057,7 +1085,7 @@ function toggleShop() {
 
 function toggleBetting() {
   if (!canTrade()) {
-    setMessage(state.playthrough === 4 ? "感染商人無法賭博。先找到洞穴裡的倖存者。" : "商人離你太遠了。");
+    setMessage(state.playthrough === 5 && state.arenaMode ? "五周目競技場的賭桌已消失。" : state.playthrough === 4 ? "感染商人無法賭博。先找到洞穴裡的倖存者。" : "商人離你太遠了。");
     return;
   }
   betting.hidden = !betting.hidden;
@@ -1484,9 +1512,16 @@ function revealAuthorBoss() {
   Object.assign(authorBoss, {
     x: authorBoss.startX, y: authorBoss.startY, hp: authorBoss.maxHp,
     attackCooldown: authorBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
-    patternIndex: 0, attackPattern: "fan", safeLane: 0, active: true,
+    patternIndex: state.playthrough === 4 ? 4 : 0,
+    attackPattern: state.playthrough === 4 ? "rift" : "fan", safeLane: 0, active: true,
   });
-  setMessage("老人：「我是作者，你只是個工具人。回歸之門由我鎖上！」真・最終 Boss「作者」現身！");
+  if (state.playthrough === 4) {
+    emitParticles(authorBoss.x, authorBoss.y, "#ff63d8", 34, 4);
+    screenShake = 0.3;
+    setMessage("老人：「我是作者，你只是個工具人。這次神秘物質讓我獲得了新力量！」異變作者現身！");
+  } else {
+    setMessage("老人：「我是作者，你只是個工具人。回歸之門由我鎖上！」真・最終 Boss「作者」現身！");
+  }
 }
 
 function returnDoorUnlocked() {
@@ -1512,13 +1547,25 @@ function enterArenaMode() {
   state.dimension = "1D";
   state.modeTimer = 0;
   state.cooldown = 0;
-  restartButton.textContent = "返回正常世界（X）";
   restartButton.disabled = false;
+  syncRestartControl();
   enterArenaRestRoom();
   if (enteringFifth) {
-    setMessage("第五周目開始：你回到競技場休息室，挑戰者已消失。從中央門重新挑戰 50 波。");
+    setMessage(`第五周目開始：競技場已被感染，所有 NPC 消失。從中央門重新挑戰 ${ARENA_TOTAL_WAVES} 波。`);
     saveGame(false);
   }
+}
+
+function enterArenaAfterAuthor() {
+  const enterFifth = state.playthrough === 4;
+  state.trueFinalMap = false;
+  state.trueFinalExitEntered = true;
+  state.worldReturned = true;
+  enterArenaMode();
+  setMessage(enterFifth
+    ? "四周目異變作者被擊敗！直接進入第五周目感染競技場；所有 NPC 都已消失。"
+    : "二周目作者被擊敗！回歸之門將你帶到競技場休息室；中央門可進入三周目。");
+  saveGame(false);
 }
 
 function exitArenaMode() {
@@ -1541,7 +1588,7 @@ function exitArenaMode() {
   arenaBossPool.forEach((boss) => { boss.active = false; });
   arenaFinalBoss.active = false;
   player.hp = player.maxHp;
-  restartButton.textContent = "重新開始（X）";
+  syncRestartControl();
   setMessage("已離開競技場，回到正常世界。");
   saveGame(false);
 }
@@ -1562,9 +1609,9 @@ function enterArenaRestRoom() {
   player.y = 370;
   player.hp = player.maxHp;
   setMessage(state.arenaFinalBossDefeated
-    ? state.playthrough === 5 ? "第五周目 50 波已完成。從中央門返回正常世界。" : "第 50 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。"
+    ? state.playthrough === 5 ? `第五周目 ${ARENA_TOTAL_WAVES} 波已完成。從中央門返回正常世界。` : `第 ${ARENA_TOTAL_WAVES} 波最終 Boss 已擊敗！與挑戰者交談，或從中央門返回正常世界。`
     : state.playthrough === 5
-    ? "第五周目競技場：挑戰者不在這裡。右側商人可補給，中央門開始挑戰。"
+    ? "第五周目感染競技場：所有 NPC 都已消失，從中央門開始挑戰。"
     : state.playthrough === 2 && state.authorBossDefeated
     ? "已抵達競技場休息室！左側可與挑戰者交談，右側商人可補給，中央門進入三周目。"
     : `已抵達競技場${state.arenaWave === 0 ? "起始" : ""}休息室！可與挑戰者交談、找商人補給，或從中央門繼續挑戰。`);
@@ -1592,9 +1639,19 @@ function restartArenaAfterDeath() {
   setMessage(state.playthrough === 5 ? "挑戰失敗，已回到第五周目起始休息室。從中央門重新挑戰。" : "挑戰失敗，已回到起始休息室。裝備、金錢與最高波次已保留；與挑戰者交談或從中央門重新挑戰。");
 }
 
+function syncRestartControl() {
+  const arenaInProgress = state.arenaMode && !state.elevatorMode;
+  restartButton.hidden = arenaInProgress;
+  touchRestartButton.hidden = arenaInProgress;
+  restartButton.textContent = state.elevatorMode ? "重新挑戰電梯（X）"
+    : state.arenaMode ? "返回休息室（X）" : "重新開始（X）";
+  touchRestartButton.textContent = state.elevatorMode ? "重新挑戰電梯"
+    : state.arenaMode ? "返回休息室" : "重新開始";
+}
+
 function getChallengerDialogue() {
-  if (state.arenaBestWave >= 50) return "挑戰者：你做到了。從看不起你到能和你並肩，我很慶幸我們成了朋友。";
-  if (state.arenaBestWave >= 30) return "挑戰者：還有最後一段路。這次我會站在你這邊，一直等你回來。";
+  if (state.arenaBestWave >= ARENA_TOTAL_WAVES) return "挑戰者：你做到了。從看不起你到能和你並肩，我很慶幸我們成了朋友。";
+  if (state.arenaBestWave >= 20) return "挑戰者：還有最後一段路。這次我會站在你這邊，一直等你回來。";
   if (state.arenaBestWave >= 15) return "挑戰者：你已經是我最信任的夥伴了。下一場，我們一起面對。";
   if (state.arenaBestWave >= 10) return "挑戰者：我以前看錯你了。要是你願意，我想和你做朋友。";
   if (state.arenaBestWave >= 5) return "挑戰者：你真的擊敗了 Boss……下次我可以和你一起練習嗎？";
@@ -1626,6 +1683,9 @@ function configureArenaCombatant(combatant, wave) {
   combatant.damage = Math.min(2.9, base.damage * strength + stage * 0.12);
   combatant.speed = base.speed * speed * (1 + stage * 0.04);
   combatant.cooldown = base.cooldown * cooldown * Math.max(0.82, 1 - stage * 0.04);
+  combatant.infected = state.playthrough === 5;
+  combatant.color = combatant.infected ? "#b04ad6" : base.color;
+  combatant.size = combatant.infected ? Math.round(base.size * 1.15) : base.size;
 }
 
 function spawnArenaCombatant() {
@@ -1865,7 +1925,7 @@ function jumpToThirdPlaythroughGate() {
   saveGame(false);
 }
 
-function jumpToArenaWave50() {
+function jumpToArenaFinalWave() {
   if (state.playthrough !== 3 || !state.arenaMode) {
     jumpToThirdPlaythroughGate();
     startThirdPlaythrough();
@@ -1875,7 +1935,7 @@ function jumpToArenaWave50() {
   state.arenaWave = ARENA_TOTAL_WAVES - 1;
   spawnNextArenaWave();
   player.hp = player.maxHp;
-  setMessage("密技成功！已到競技場第 50 波。先擊敗 5 名敵人，再挑戰最終 Boss。");
+  setMessage(`密技成功！已到競技場第 ${ARENA_TOTAL_WAVES} 波。先擊敗 5 名敵人，再挑戰最終 Boss。`);
   saveGame(false);
 }
 
@@ -1932,7 +1992,7 @@ function interact() {
     } else if (state.arenaRestRoom && state.playthrough !== 5 && Math.hypot(player.x - challenger.x, player.y - challenger.y) < 85) {
       state.challengerDialogOpen = true;
       setMessage("挑戰者正在和你說話，按 F 關閉對話框。");
-    } else if (state.arenaRestRoom && distanceToMerchant() < 90) {
+    } else if (state.arenaRestRoom && state.playthrough !== 5 && distanceToMerchant() < 90) {
       toggleShop();
     } else if (state.arenaRestRoom && state.arenaFinalBossDefeated
       && Math.hypot(player.x - arenaContinueGate.x, player.y - arenaContinueGate.y) < 85) {
@@ -1947,7 +2007,7 @@ function interact() {
       setMessage(state.arenaFinalBossDefeated
         ? state.playthrough === 5 ? "挑戰已完成。前往中央門按 F 返回正常世界。" : "挑戰已完成。與挑戰者交談，或前往中央門按 F 返回正常世界。"
         : state.playthrough === 5
-        ? "挑戰者已消失。前往中央門按 F 開始第五周目競技場挑戰。"
+        ? "所有 NPC 已消失。前往中央門按 F 開始第五周目感染競技場挑戰。"
         : state.playthrough === 2 && state.authorBossDefeated
         ? "與左側挑戰者對話，或前往中央三周目之門按 F。"
         : "與左側挑戰者對話，或前往中央門按 F 開始挑戰。");
@@ -2233,6 +2293,7 @@ function attackOrParry() {
 }
 
 function damageEnemy(enemy, amount) {
+  if (enemy === authorBoss && state.playthrough === 4 && state.authorIntroTimer > 0) return;
   const wasAlive = enemy.hp > 0;
   enemy.hp = Math.max(0, enemy.hp - amount);
   emitParticles(enemy.x, enemy.y, enemy.hp > 0 ? "#f4f0df" : "#ffd166", enemy.hp > 0 ? 7 : 18, enemy.hp > 0 ? 2 : 3.4);
@@ -2375,7 +2436,22 @@ function fireAuthorPattern(enemy) {
       if (index !== enemy.safeLane) fire(fromRight ? W - 18 : 18, y, fromRight ? -5.8 : 5.8, 0, "#f495d8", 9);
     });
     setMessage("作者發射橫向彈幕！沿著沒有預警線的通道閃避。");
-  } else {
+  } else if (enemy.attackPattern === "rift") {
+    AUTHOR_RIFT_COLUMNS.forEach((x, index) => {
+      if (index === enemy.safeLane) return;
+      [-18, 0, 18].forEach((offset) => fire(x + offset, 82, 0, 4.1, "#ff6ce5", 8));
+    });
+    setMessage("異變作者撕開垂直裂隙！移到沒有紫色預警線的通道。");
+  } else if (enemy.attackPattern === "echo") {
+    [[90, 165], [W - 90, 420]].forEach(([x, y]) => {
+      const angle = Math.atan2(enemy.attackTargetY - y, enemy.attackTargetX - x);
+      [-0.16, 0, 0.16].forEach((offset) => {
+        const direction = angle + offset;
+        fire(x, y, Math.cos(direction) * 5, Math.sin(direction) * 5, "#80eaff", 8);
+      });
+    });
+    setMessage("異變作者召喚雙側虛影！離開預警線交會的位置。");
+  } else if (enemy.attackPattern === "ring") {
     for (let index = 0; index < 12; index += 1) {
       const angle = (index / 12) * Math.PI * 2 + enemy.patternIndex * 0.16;
       fire(enemy.x, enemy.y, Math.cos(angle) * 4.2, Math.sin(angle) * 4.2, "#aee9ff", 7);
@@ -2387,6 +2463,7 @@ function fireAuthorPattern(enemy) {
 function updateEnemy(enemy, dt) {
   if (!enemy.active || enemy.hp <= 0) return;
   const attackType = enemy.attackType || "melee";
+  const style = enemy.attackStyle || 0;
   const attackDamage = enemy.damage || 1;
   const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss || enemy === trueFinalBoss || enemy === authorBoss || enemy === arenaFinalBoss) && enemy.hp <= enemy.maxHp / 2;
   const cooldown = enraged ? enemy.cooldown * 0.65 : enemy.cooldown;
@@ -2411,15 +2488,24 @@ function updateEnemy(enemy, dt) {
       if (attackType === "author") {
         fireAuthorPattern(enemy);
       } else if (attackType === "ranged") {
-        projectiles.push({ x: enemy.x, y: enemy.y, vx: Math.sign(player.x - enemy.x) * 4.5, vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 2 : 0, damage: attackDamage, color: enemy.color, source: enemy });
-        setMessage(`${enemy.type} 發射了遠程攻擊！`);
+        const shotCount = 1 + style % 3 * 2;
+        const spread = 0.3 + style * 0.025;
+        for (let shot = 0; shot < shotCount; shot += 1) {
+          const direction = Math.sign(player.x - enemy.x) || 1;
+          const offset = shot - Math.floor(shotCount / 2);
+          projectiles.push({ x: enemy.x, y: enemy.y, vx: direction * (4.1 + style * 0.055),
+            vy: (state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 1.5 : 0) + offset * spread,
+            damage: attackDamage, color: enemy.color, source: enemy });
+        }
+        setMessage(`${enemy.type} 發射了 ${shotCount} 道遠程攻擊！`);
       } else if (attackType === "shockwave") {
-        (state.dimension === "2D" ? [-1, 0, 1] : [0]).forEach((verticalDirection) => {
+        const sideWaves = style % 3;
+        Array.from({ length: sideWaves * 2 + 1 }, (_, index) => index - sideWaves).forEach((verticalDirection) => {
           projectiles.push({
             x: enemy.x,
-            y: enemy.y + (state.dimension === "2D" ? verticalDirection * 42 : 0),
-            vx: Math.sign(player.x - enemy.x) * 5,
-            vy: state.dimension === "2D" ? verticalDirection * 0.8 : 0,
+            y: enemy.y + (state.dimension === "2D" ? verticalDirection * 30 : 0),
+            vx: (Math.sign(player.x - enemy.x) || 1) * (4.7 + style * 0.065),
+            vy: verticalDirection * (state.dimension === "2D" ? 0.55 : 0.2),
             damage: attackDamage,
             color: "#d7a7ff",
             source: enemy,
@@ -2430,17 +2516,18 @@ function updateEnemy(enemy, dt) {
         setMessage(`${enemy.type} 釋放了裂地震波！`);
       } else if (attackType === "void") {
         const aimX = Math.sign(player.x - enemy.x) || 1;
-        [-1, 0, 1].forEach((spread) => {
+        const sideBolts = 1 + style % 2;
+        Array.from({ length: sideBolts * 2 + 1 }, (_, index) => index - sideBolts).forEach((spread) => {
           projectiles.push({
             x: enemy.x, y: enemy.y,
-            vx: aimX * 4.8,
-            vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 1.4 + spread * 1.35 : spread * 0.9,
+            vx: aimX * (4.5 + style * 0.045),
+            vy: state.dimension === "2D" ? Math.sign(player.y - enemy.y) * 1.4 + spread * (1.1 + style * 0.02) : spread * (0.75 + style * 0.02),
             damage: attackDamage,
             color: "#a77cff",
             source: enemy,
           });
         });
-        enemy.x = player.x < W / 2 ? W - 150 : 150;
+        enemy.x = player.x < W / 2 ? W - 135 - style * 3 : 135 + style * 3;
         if (state.dimension === "2D") enemy.y = Math.max(120, Math.min(H - 120, player.y + (Math.random() < 0.5 ? -110 : 110)));
         emitParticles(enemy.x, enemy.y, "#a77cff", 22, 3.1);
         screenShake = 0.24;
@@ -2448,16 +2535,16 @@ function updateEnemy(enemy, dt) {
         setMessage(`${enemy.type} 撕裂空間，釋放三重虛空彈！`);
       } else {
         if (attackType === "dash") {
-          enemy.x = enemy.attackTargetX ?? player.x;
+          enemy.x = (enemy.attackTargetX ?? player.x) + (style % 3 - 1) * (5 + style);
           if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
         } else if (attackType === "dimension") {
           const targetX = enemy.attackTargetX ?? player.x;
-          enemy.x = targetX + (targetX < W / 2 ? 64 : -64);
+          enemy.x = targetX + (targetX < W / 2 ? 55 + style * 4 : -55 - style * 4);
           if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
           enemy.x = Math.max(55, Math.min(W - 55, enemy.x));
           playSound(260, 0.18, "triangle");
         } else if (attackType === "leap") {
-          enemy.x = enemy.attackTargetX ?? player.x;
+          enemy.x = (enemy.attackTargetX ?? player.x) + (style % 2 ? -1 : 1) * Math.min(18, style * 2);
           if (state.dimension === "2D") enemy.y = enemy.attackTargetY ?? player.y;
         }
         const impactRadius = {
@@ -2467,7 +2554,7 @@ function updateEnemy(enemy, dt) {
           smash: 120,
           dimension: 82,
         }[attackType] || 72;
-        const adjustedImpactRadius = enemy.type === "幽影獵手" ? 92 : impactRadius;
+        const adjustedImpactRadius = enemy.type === "幽影獵手" ? 92 : impactRadius * (0.92 + style * 0.012);
         const attackMissed = distanceToEnemy(enemy) > adjustedImpactRadius;
         if (attackMissed) {
           setMessage(`${enemy.type} 的${attackType === "smash" ? "重擊" : "攻擊"}落空了！`);
@@ -2486,7 +2573,7 @@ function updateEnemy(enemy, dt) {
             state.attackTimer = 0;
             state.shieldTimer = 0;
             setMessage(state.arenaMode
-              ? "競技場挑戰結束，按 X 或下方按鈕返回正常世界。"
+              ? "競技場挑戰結束，正返回起始休息室。"
               : "HP 歸零，遊戲結束。按 X 或下方按鈕重新開始。");
           } else {
             setMessage(`${enemy.type} 擊中你！`);
@@ -2495,11 +2582,7 @@ function updateEnemy(enemy, dt) {
           repelEnemy(enemy);
         }
       }
-      if (attackType !== "ranged" && attackType !== "shockwave") {
-        enemy.attackCooldown = cooldown;
-      } else {
-        enemy.attackCooldown = cooldown;
-      }
+      enemy.attackCooldown = cooldown;
     }
   } else if (distance < enemy.range && enemy.attackCooldown <= 0) {
     enemy.attackWindup = attackType === "dash" ? 0.28
@@ -2511,13 +2594,18 @@ function updateEnemy(enemy, dt) {
       : attackType === "void" ? 0.72
       : attackType === "dimension" ? 0.5
       : 0.55;
+    if (attackType !== "author") enemy.attackWindup *= 0.9 + style * 0.017;
     enemy.attackTargetX = player.x;
     enemy.attackTargetY = player.y;
     if (attackType === "author") {
-      const patterns = ["fan", "lanes", "ring", "flip"];
+      const patterns = state.playthrough === 4
+        ? ["fan", "lanes", "ring", "flip", "rift", "echo"]
+        : ["fan", "lanes", "ring", "flip"];
       enemy.attackPattern = patterns[(enemy.patternIndex || 0) % patterns.length];
       enemy.patternIndex = (enemy.patternIndex || 0) + 1;
-      enemy.safeLane = Math.floor(Math.random() * 6);
+      enemy.safeLane = enemy.attackPattern === "rift"
+        ? AUTHOR_RIFT_COLUMNS.reduce((closest, x, index) => Math.abs(x - player.x) < Math.abs(AUTHOR_RIFT_COLUMNS[closest] - player.x) ? index : closest, 0)
+        : Math.floor(Math.random() * 6);
     }
     if (enraged) enemy.attackWindup *= 0.8;
   }
@@ -2556,7 +2644,7 @@ function updateProjectiles(dt) {
         emitParticles(player.x, player.y, "#ff6b6b", 12, 2.8);
         emitFloatingText(`-${projectile.damage}`, player.x, player.y - 28, "#ff6b6b");
         setMessage(player.hp > 0 ? "遠程攻擊命中你！" : state.arenaMode
-          ? "競技場挑戰結束，按 X 或下方按鈕返回正常世界。"
+          ? "競技場挑戰結束，正返回起始休息室。"
           : "HP 歸零，遊戲結束。按 X 或下方按鈕重新開始。");
         if (player.hp <= 0) {
           state.gameOver = true;
@@ -2706,7 +2794,7 @@ function update(dt) {
       state.authorIntroTimer = 0;
       state.screenFlipTimer = 0;
       projectiles.length = 0;
-      setMessage("作者已被擊敗！回歸之門重新開啟，前往右側按 F 回到正常世界。");
+      enterArenaAfterAuthor();
     } else if (extra && !state.extraEnemyDefeated && extra.enemy.hp <= 0 && extra.enemy.active) {
       extra.enemy.active = false;
       state.extraEnemyDefeated = true;
@@ -2787,7 +2875,8 @@ function drawGlow(x, y, radius, color, alpha = 0.7) {
 }
 
 function drawAmbientBackdrop() {
-  const palette = state.playthrough === 4
+  const infectedArena = state.playthrough === 5 && state.arenaMode;
+  const palette = state.playthrough === 4 || infectedArena
     ? { top: "#170719", middle: "#38163b", bottom: "#652c57", mote: "#d77ae3", ridge: "#49224e", ground: "#211023" }
     : state.voidMap
     ? { top: "#080510", middle: "#1d1035", bottom: "#3c1d61", mote: "#b58cff", ridge: "#2a1647", ground: "#10091b" }
@@ -2877,7 +2966,7 @@ function drawAmbientBackdrop() {
       ctx.fillRect(x + 14, 278, 26, 27);
     }
   }
-  if (state.playthrough === 4) {
+  if (state.playthrough === 4 || infectedArena) {
     ctx.strokeStyle = "#b85bc780";
     ctx.lineWidth = 5;
     for (let x = 40; x < W; x += 175) {
@@ -2949,12 +3038,12 @@ function drawBackground() {
   }
   if (state.arenaMode) {
     if (state.arenaRestRoom) {
-      drawText("競技場休息室", 24, 105, 16, "#b8ffe1");
-      drawText(state.arenaFinalBossDefeated ? "50 波完成・最終 Boss 已擊敗"
+      drawText(state.playthrough === 5 ? "感染競技場休息室" : "競技場休息室", 24, 105, 16, state.playthrough === 5 ? "#f6a8e9" : "#b8ffe1");
+      drawText(state.arenaFinalBossDefeated ? `${ARENA_TOTAL_WAVES} 波完成・最終 Boss 已擊敗`
         : state.arenaWave === 0 ? "挑戰起點・生命已恢復" : `第 ${state.arenaWave} 波完成・生命已恢復`, 24, 130, 13, "#d7f5e5");
-      ctx.fillStyle = "#183b36";
+      ctx.fillStyle = state.playthrough === 5 ? "#481b50" : "#183b36";
       ctx.fillRect(0, 382, W, 8);
-      ctx.fillStyle = "#254d45";
+      ctx.fillStyle = state.playthrough === 5 ? "#6a2b69" : "#254d45";
       ctx.fillRect(305, 175, 350, 42);
       ctx.fillRect(325, 217, 32, 165);
       ctx.fillRect(603, 217, 32, 165);
@@ -2970,9 +3059,9 @@ function drawBackground() {
       }
       return;
     }
-    drawText("競技場模式", 24, 105, 16, "#ff7188");
+    drawText(state.playthrough === 5 ? "感染競技場" : "競技場模式", 24, 105, 16, state.playthrough === 5 ? "#f6a8e9" : "#ff7188");
     drawText(`第 ${state.arenaWave} / ${ARENA_TOTAL_WAVES} 波：${state.arenaBossActive ? "Boss 戰" : `敵人 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`}`, 24, 130, 13, "#ffd6dc");
-    ctx.fillStyle = "#8e304d99";
+    ctx.fillStyle = state.playthrough === 5 ? "#962ea599" : "#8e304d99";
     ctx.fillRect(0, 382, W, 6);
     return;
   }
@@ -2980,7 +3069,7 @@ function drawBackground() {
     drawText("真・最終地圖：維度核心", 24, 105, 16, "#f9a6eb");
     const chapter = !state.trueFinalBossDefeated ? "擊敗維度之源，解鎖回歸之門"
       : !state.authorRevealed ? "回歸之門已開啟，前往右側按 F"
-      : !state.authorBossDefeated ? "作者鎖上了門！在 2D 場地中閃避彈幕"
+      : !state.authorBossDefeated ? `${state.playthrough === 4 ? "異變作者" : "作者"}鎖上了門！在 2D 場地中閃避彈幕`
       : "作者已被擊敗，前往回歸之門按 F";
     drawText(chapter, 24, 130, 13, "#f7d7f3");
     drawGlow(W / 2, 255, 110, "#e461d8", 0.42);
@@ -3225,7 +3314,7 @@ function drawCharacter() {
 }
 
 function drawElder() {
-  if (state.playthrough === 4 || state.authorRevealed || state.caveMode) return;
+  if (state.playthrough === 4 || state.playthrough === 5 && state.arenaMode || state.authorRevealed || state.caveMode) return;
   ctx.fillStyle = "#07091266";
   ctx.beginPath(); ctx.ellipse(elder.x, elder.y + 20, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#6f4d43";
@@ -3247,6 +3336,7 @@ function drawElder() {
 function drawEnemy() {
   getCombatants().forEach((enemy) => {
     if (!enemy.active || enemy.hp <= 0) return;
+  const authorChanging = enemy === authorBoss && state.playthrough === 4 && state.authorIntroTimer > AUTHOR_INTRO_DURATION / 2;
   const enraged = ((state.bossPhase && bosses.includes(enemy)) || enemy === voidBoss || enemy === trueFinalBoss || enemy === authorBoss || enemy === arenaFinalBoss) && enemy.hp <= enemy.maxHp / 2;
   if (enemy.attackWindup > 0) {
     ctx.save();
@@ -3268,6 +3358,17 @@ function drawEnemy() {
         [125, 185, 245, 305, 365, 425].forEach((y, index) => {
           if (index === enemy.safeLane) return;
           ctx.beginPath(); ctx.moveTo(55, y); ctx.lineTo(W - 55, y); ctx.stroke();
+        });
+      } else if (enemy.attackPattern === "rift") {
+        AUTHOR_RIFT_COLUMNS.forEach((x, index) => {
+          if (index === enemy.safeLane) return;
+          ctx.beginPath(); ctx.moveTo(x, 84); ctx.lineTo(x, H - 70); ctx.stroke();
+        });
+      } else if (enemy.attackPattern === "echo") {
+        [[90, 165], [W - 90, 420]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.moveTo(x, y);
+          ctx.lineTo(enemy.attackTargetX ?? player.x, enemy.attackTargetY ?? player.y);
+          ctx.stroke();
         });
       } else if (enemy.attackPattern === "ring") {
         ctx.beginPath(); ctx.arc(enemy.x, enemy.y, 110, 0, Math.PI * 2); ctx.stroke();
@@ -3311,12 +3412,13 @@ function drawEnemy() {
     ctx.restore();
   }
   ctx.save();
+  if (enemy === authorBoss && state.playthrough === 4 && state.authorRevealed && !authorChanging) drawGlow(enemy.x, enemy.y, enemy.size * 1.2, "#ff63d8", 0.42);
   ctx.translate(enemy.x, enemy.y);
   ctx.globalAlpha = 0.38;
   ctx.fillStyle = "#05060d";
   ctx.beginPath(); ctx.ellipse(0, enemy.size / 2 + 7, enemy.size * 0.65, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
-  const enemyColor = enemy.hitFlash > 0 ? "#f4f0df" : enemy.attackWindup > 0 ? "#ef6c72" : enraged ? "#ff4f5f" : enemy.color;
+  const enemyColor = authorChanging ? "#f4d18d" : enemy.hitFlash > 0 ? "#f4f0df" : enemy.attackWindup > 0 ? "#ef6c72" : enraged ? "#ff4f5f" : enemy.color;
   ctx.shadowColor = enemy.attackWindup > 0 || enraged ? enemyColor : "transparent";
   ctx.shadowBlur = enemy.attackWindup > 0 || enraged ? 16 : 0;
   ctx.fillStyle = "#171424";
@@ -3330,7 +3432,7 @@ function drawEnemy() {
   ctx.fillRect(5, -6, 5, 5);
   ctx.fillStyle = "#2b1720";
   ctx.fillRect(-7, 6, 14, 4);
-  if (enemy.infected) {
+  if (enemy.infected && !authorChanging) {
     ctx.strokeStyle = "#ed9bff";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -3385,10 +3487,10 @@ function drawEnemy() {
     shockwave: "裂地震波！",
     dimension: "維度突襲！",
     void: "虛空裂變！",
-    author: ({ fan: "扇形彈幕！", lanes: "橫向彈幕！", ring: "環形彈幕！", flip: "畫面翻轉！" })[enemy.attackPattern] || "作者攻擊！",
+    author: ({ fan: "扇形彈幕！", lanes: "橫向彈幕！", ring: "環形彈幕！", flip: "畫面翻轉！", rift: "垂直裂隙！", echo: "雙側虛影！" })[enemy.attackPattern] || "作者攻擊！",
   }[enemy.attackType];
   const warningText = `${attackLabel || "攻擊！"} ${enemy.attackWindup.toFixed(1)}秒`;
-  drawText(enemy.attackWindup > 0 ? warningText : `${enemy.infected ? "感染・" : ""}${enemy.type} HP ${enemy.hp}`, enemy.x, enemy.y - enemy.size / 2 - 8, 12, enemy.attackWindup > 0 ? "#ffdd9b" : "#d99aac", "center");
+  drawText(enemy.attackWindup > 0 ? warningText : `${enemy.infected && !authorChanging ? "感染・" : ""}${authorChanging ? "真・最終 Boss：作者" : enemy.type} HP ${enemy.hp}`, enemy.x, enemy.y - enemy.size / 2 - 8, 12, enemy.attackWindup > 0 ? "#ffdd9b" : "#d99aac", "center");
   if (enemy.attackWindup > 0) {
     const maxWindup = enemy.attackType === "shockwave" ? 1.05
       : enemy.attackType === "author" ? 0.9
@@ -3530,7 +3632,7 @@ function getCurrentObjective() {
   if (state.elevatorMode) return `電梯第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波：敵人 ${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`;
   if (state.caveMode) return state.remoteTradeUnlocked ? "洞穴：H 商店、G 賭桌；左側出口按 F" : "靠近倖存者並按 F 取得補給能力";
   if (state.arenaRestRoom && state.arenaFinalBossDefeated) return state.playthrough === 5 ? "第五周目競技場完成：從中央門返回" : "競技場完成：與挑戰者對話或從中央門返回";
-  if (state.arenaRestRoom) return state.playthrough === 5 ? "第五周目休息室：商人補給、中央門挑戰" : state.playthrough === 2 && state.authorBossDefeated
+  if (state.arenaRestRoom) return state.playthrough === 5 ? "五周目感染休息室：中央門挑戰" : state.playthrough === 2 && state.authorBossDefeated
     ? "休息室：挑戰者對話、商人補給、中央門進三周目"
     : "休息室：挑戰者對話、商人補給、中央門挑戰";
   if (state.arenaMode) return state.arenaBossActive
@@ -3539,7 +3641,7 @@ function getCurrentObjective() {
   if (state.trueFinalMap) {
     if (!state.trueFinalBossDefeated) return "擊敗維度之源";
     if (!state.authorRevealed) return "前往回歸之門並按 F";
-    return state.authorBossDefeated ? "再次前往回歸之門並按 F" : "擊敗真・最終 Boss：作者";
+    return state.authorBossDefeated ? "再次前往回歸之門並按 F" : `擊敗真・最終 Boss：${state.playthrough === 4 ? "異變作者" : "作者"}`;
   }
   if (state.worldReturned) return "冒險完成：你已回到正常世界";
   const extra = currentExtraMap();
@@ -3637,7 +3739,7 @@ function drawHud() {
   }
   const progress = state.caveMode ? "倖存者" : state.playthrough === 4 && inFirstMap() && !state.merchantDefeated ? "感染商人"
     : state.elevatorMode ? `電梯 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES}・${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`
-    : state.arenaRestRoom ? (state.arenaFinalBossDefeated ? "50 波完成" : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
+    : state.arenaRestRoom ? (state.arenaFinalBossDefeated ? `${ARENA_TOTAL_WAVES} 波完成` : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
     : state.arenaMode ? (state.arenaBossActive ? `第 ${state.arenaWave} 波 Boss` : `第 ${state.arenaWave} 波 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`)
     : state.trueFinalMap ? (!state.trueFinalBossDefeated ? "維度之源" : state.authorRevealed && !state.authorBossDefeated ? "作者" : "回歸之門")
     : extra ? (!state.extraEnemyDefeated ? extra.enemy.type : extra.boss.hp > 0 ? extra.boss.type : extraPuzzleText(extra))
@@ -3700,7 +3802,7 @@ function drawTutorial() {
 }
 
 function drawMerchant() {
-  if (state.playthrough === 4 || state.caveMode || state.arenaMode && !state.arenaRestRoom) return;
+  if (state.playthrough === 4 || state.playthrough === 5 && state.arenaMode || state.caveMode || state.arenaMode && !state.arenaRestRoom) return;
   ctx.fillStyle = "#07091266";
   ctx.beginPath(); ctx.ellipse(merchant.x, merchant.y + 20, 23, 7, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#4f3550";
@@ -3821,6 +3923,7 @@ function drawArenaFinale() {
 }
 
 function draw() {
+  syncRestartControl();
   if (state.cutscenePhase) {
     drawArenaFinale();
     return;
@@ -3863,8 +3966,9 @@ function draw() {
     ctx.fillRect(135, 380, 690, 105);
     ctx.strokeStyle = "#ffd28a";
     ctx.strokeRect(135, 380, 690, 105);
-    drawText("老人現出作者身分，鎖上回歸之門！", W / 2, 418, 20, "#ffd28a", "center");
-    drawText("我是作者，你只是個工具人。", W / 2, 455, 18, "#f4f0df", "center");
+    const changing = state.playthrough === 4 && state.authorIntroTimer <= AUTHOR_INTRO_DURATION / 2;
+    drawText(changing ? "神秘物質湧入作者，作者感染變身！" : "老人現出作者身分，鎖上回歸之門！", W / 2, 418, 20, changing ? "#ff9fe9" : "#ffd28a", "center");
+    drawText(changing ? "作者：「我獲得了新力量，現在由我改寫戰場！」" : "我是作者，你只是個工具人。", W / 2, 455, 18, "#f4f0df", "center");
   }
   if (state.trueFinalMap && state.authorRevealed && state.screenFlipTimer > 0) {
     drawText(`作者翻轉畫面・${state.screenFlipTimer.toFixed(1)} 秒`, W / 2, H - 16, 15, "#ffd28a", "center");
@@ -3886,7 +3990,7 @@ function draw() {
     ctx.strokeRect(230, 175, 500, 190);
     drawText("遊戲結束", W / 2, 235, 38, "#ff9b9f", "center");
     drawText("HP 已歸零", W / 2, 275, 18, "#f4f0df", "center");
-    drawText(state.arenaMode ? "按 X 返回正常世界" : "按 X 或下方按鈕重新開始", W / 2, 318, 16, "#f4d18d", "center");
+    drawText(state.arenaMode ? "正在返回起始休息室" : "按 X 或下方按鈕重新開始", W / 2, 318, 16, "#f4d18d", "center");
   }
 
 }
@@ -3901,7 +4005,9 @@ function loop(now) {
 function restartFromControl() {
   if (state.cutscenePhase) return;
   if (state.elevatorMode) restartElevatorAfterDeath();
-  else if (state.arenaMode) exitArenaMode();
+  else if (state.arenaMode) {
+    if (state.gameOver) restartArenaAfterDeath();
+  }
   else resetGame();
 }
 
@@ -3942,9 +4048,9 @@ document.addEventListener("keydown", (event) => {
       event.preventDefault();
       return;
     }
-    if (state.secretBuffer.endsWith(ARENA_FIFTY_SEQUENCE)) {
+    if (state.secretBuffer.endsWith(ARENA_FINAL_SEQUENCE)) {
       state.secretBuffer = "";
-      jumpToArenaWave50();
+      jumpToArenaFinalWave();
       event.preventDefault();
       return;
     }

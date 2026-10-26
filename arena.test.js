@@ -75,6 +75,90 @@ function defeatCurrent(game) {
 
 {
   const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(2); state.trueFinalMap = true; state.trueFinalBossDefeated = true; revealAuthorBoss()");
+  assert.equal(game.run("authorBoss.type"), "真・最終 Boss：作者");
+  game.run("player.x = 600; authorBoss.patternIndex = 4; authorBoss.attackCooldown = 0; updateEnemy(authorBoss, 0.016)");
+  assert.equal(game.run("authorBoss.attackPattern"), "fan");
+  game.run("authorBoss.hp = 0; update(0.016)");
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom"), true);
+  assert.equal(game.run("state.playthrough"), 2);
+  game.run("player.x = thirdPlaythroughGate.x; interact()");
+  assert.equal(game.run("state.playthrough"), 3);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.trueFinalMap = true; state.trueFinalBossDefeated = true; revealAuthorBoss(); draw()");
+  assert.equal(game.run("authorBoss.type"), "真・最終 Boss：異變作者");
+  assert.equal(game.run("authorBoss.patternIndex"), 4);
+  game.run("damageEnemy(authorBoss, 5)");
+  assert.equal(game.run("authorBoss.hp"), game.run("authorBoss.maxHp"));
+  game.run("player.x = 600; authorBoss.attackCooldown = 0; updateEnemy(authorBoss, 0.016)");
+  assert.equal(game.run("authorBoss.attackPattern"), "rift");
+  game.run("fireAuthorPattern(authorBoss)");
+  assert.equal(game.run("projectiles.length"), 15);
+  assert.equal(game.run("projectiles.every((item) => Math.abs(item.x - AUTHOR_RIFT_COLUMNS[authorBoss.safeLane]) > 20)"), true);
+  game.run("projectiles.length = 0; authorBoss.attackPattern = 'echo'; fireAuthorPattern(authorBoss)");
+  assert.equal(game.run("projectiles.length"), 6);
+  game.run("saveGame(false); loadGame(); draw()");
+  assert.equal(game.run("state.playthrough"), 4);
+  assert.equal(game.run("authorBoss.attackPattern"), "echo");
+  assert.equal(game.run("authorBoss.type"), "真・最終 Boss：異變作者");
+  game.run("authorBoss.hp = 0; state.authorIntroTimer = 0; update(0.016)");
+  assert.equal(game.run("state.authorBossDefeated"), true);
+  assert.equal(game.run("state.playthrough"), 5);
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom"), true);
+  game.run("saveGame(false); loadGame()");
+  assert.equal(game.run("state.playthrough === 5 && state.arenaMode && state.arenaRestRoom"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.trueFinalMap = true; state.authorBossDefeated = true; saveGame(false); loadGame()");
+  assert.equal(game.run("state.playthrough === 5 && state.arenaMode && state.arenaRestRoom"), true);
+}
+
+{
+  const game = createGame();
+  enterThirdArena(game);
+  game.run("draw()");
+  assert.equal(game.run("restartButton.hidden && touchRestartButton.hidden"), true);
+  game.press("x");
+  game.touch("x");
+  assert.equal(game.run("state.arenaMode && !state.arenaRestRoom"), true);
+  game.run("state.gameOver = true; draw()");
+  assert.equal(game.run("restartButton.hidden && touchRestartButton.hidden"), true);
+  game.run("restartArenaAfterDeath()");
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom && !state.gameOver && state.arenaWave === 0"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame()");
+  assert.equal(game.run("allCombatants.every((enemy) => Number.isInteger(enemy.attackStyle))"), true);
+  assert.equal(game.run("new Set(allCombatants.map((enemy) => `${enemy.attackType || 'melee'}:${enemy.attackStyle}`)).size"), game.run("allCombatants.length"));
+  game.run("player.x = 400; player.y = 370; projectiles.length = 0; arenaEnemyPool[2].active = true; arenaEnemyPool[2].attackWindup = 0.001; updateEnemy(arenaEnemyPool[2], 0.016)");
+  const firstVolley = game.run("projectiles.map((item) => [item.vx, item.vy])");
+  game.run("projectiles.length = 0; arenaEnemyPool[6].active = true; arenaEnemyPool[6].attackWindup = 0.001; updateEnemy(arenaEnemyPool[6], 0.016)");
+  const secondVolley = game.run("projectiles.map((item) => [item.vx, item.vy])");
+  assert.notDeepEqual(firstVolley, secondVolley);
+  game.run("player.hp = 1000; state.dimension = '2D'; authorBoss.patternIndex = 0; authorBoss.attackPattern = 'fan'; allCombatants.forEach((enemy) => { projectiles.length = 0; enemy.active = true; enemy.hp = enemy.maxHp; enemy.attackTargetX = player.x; enemy.attackTargetY = player.y; enemy.attackWindup = 0.001; updateEnemy(enemy, 0.016); if (!Number.isFinite(enemy.x) || !Number.isFinite(enemy.y) || projectiles.some((item) => !Number.isFinite(item.vx) || !Number.isFinite(item.vy))) throw new Error(enemy.type); enemy.active = false; })");
+}
+
+{
+  const game = createGame();
+  enterThirdArena(game);
+  game.run("state.arenaWave = 45; state.arenaBestWave = 44; saveGame(false); loadGame()");
+  assert.equal(game.run("state.arenaRestRoom"), true);
+  assert.equal(game.run("state.arenaWave"), 29);
+  game.run("player.x = arenaContinueGate.x; interact()");
+  assert.equal(game.run("state.arenaWave"), 30);
+  game.run("state.arenaRestRoom = true; saveGame(false); loadGame()");
+  assert.equal(game.run("state.arenaWave"), 29);
+}
+
+{
+  const game = createGame();
   enterThirdArena(game);
   assert.match(game.run("getChallengerDialogue()"), /別拖累/);
   assert.equal(game.run("arenaEnemyPool.length"), 33);
@@ -83,7 +167,7 @@ function defeatCurrent(game) {
   const seenEnemies = new Set();
   const seenBosses = new Set();
   let firstBossHp;
-  for (let wave = 1; wave <= 50; wave += 1) {
+  for (let wave = 1; wave <= 30; wave += 1) {
     assert.equal(game.run("state.arenaWave"), wave);
     for (let enemy = 1; enemy <= 5; enemy += 1) {
       assert.equal(game.run("state.arenaBossActive"), false);
@@ -93,9 +177,9 @@ function defeatCurrent(game) {
     }
     if (wave % 5 === 0) {
       assert.equal(game.run("state.arenaBossActive"), true);
-      if (wave < 50) seenBosses.add(game.run("getCombatants().find((enemy) => enemy.active).type"));
+      if (wave < 30) seenBosses.add(game.run("getCombatants().find((enemy) => enemy.active).type"));
       if (wave === 5) firstBossHp = game.run("getCombatants().find((enemy) => enemy.active).maxHp");
-      if (wave === 45) assert.ok(game.run("getCombatants().find((enemy) => enemy.active).maxHp") > firstBossHp);
+      if (wave === 25) assert.ok(game.run("getCombatants().find((enemy) => enemy.active).maxHp") > firstBossHp);
       if (wave === 25) {
         game.run("getCombatants().find((enemy) => enemy.active).hp -= 2; saveGame(false)");
         const bossHp = game.run("getCombatants().find((enemy) => enemy.active).hp");
@@ -103,12 +187,12 @@ function defeatCurrent(game) {
         assert.equal(game.run("state.arenaBossActive"), true);
         assert.equal(game.run("getCombatants().find((enemy) => enemy.active).hp"), bossHp);
       }
-      if (wave === 50) {
+      if (wave === 30) {
         assert.equal(game.run("getCombatants().find((enemy) => enemy.active) === arenaFinalBoss"), true);
       }
       defeatCurrent(game);
       assert.equal(game.run("state.arenaBestWave"), wave);
-      if (wave === 50) {
+      if (wave === 30) {
         assert.equal(game.run("state.cutscenePhase"), "author");
         game.run("draw(); saveGame(false); loadGame()");
         assert.equal(game.run("state.cutscenePhase"), "author");
@@ -116,17 +200,17 @@ function defeatCurrent(game) {
         assert.equal(game.run("state.arenaRestRoom"), true);
       }
       if (wave === 10) assert.match(game.run("getChallengerDialogue()"), /朋友/);
-      if (wave < 50) game.run("player.x = 480; interact()");
+      if (wave < 30) game.run("player.x = 480; interact()");
     } else {
       assert.equal(game.run("state.arenaWave"), wave + 1);
     }
-    if (wave === 49) {
+    if (wave === 29) {
       assert.ok(game.run("getCombatants().find((enemy) => enemy.active).maxHp") > firstHp);
     }
   }
   assert.equal(game.run("state.arenaFinalBossDefeated"), true);
   assert.equal(seenEnemies.size, 33);
-  assert.equal(seenBosses.size, 9);
+  assert.equal(seenBosses.size, 5);
   assert.match(game.run("getChallengerDialogue()"), /朋友/);
   game.run("update(4); draw()");
   assert.equal(game.run("state.cutscenePhase"), "push");
@@ -285,12 +369,25 @@ function defeatCurrent(game) {
   assert.equal(game.run("state.arenaMode && state.arenaRestRoom"), true);
   game.run("player.x = challenger.x; interact()");
   assert.equal(game.run("state.challengerDialogOpen"), false);
+  game.run("player.x = merchant.x; toggleShop(); toggleBetting(); draw()");
+  assert.equal(game.run("canTrade() || !shop.hidden || !betting.hidden"), false);
+  assert.equal(game.run("restartButton.hidden && touchRestartButton.hidden"), true);
   game.run("saveGame(false); loadGame(); draw()");
   assert.equal(game.run("state.playthrough"), 5);
   assert.equal(game.run("state.challengerDialogOpen"), false);
-  game.run("state.arenaWave = 50; state.arenaBossActive = true; advanceArenaAfterDefeat()");
+  game.run("player.x = arenaContinueGate.x; interact()");
+  assert.equal(game.run("state.arenaWave"), 1);
+  assert.equal(game.run("getCombatants().find((enemy) => enemy.active).infected"), true);
+  assert.equal(game.run("getCombatants().find((enemy) => enemy.active).size > baseCombatStats.get(getCombatants().find((enemy) => enemy.active)).size"), true);
+  game.run("saveGame(false); loadGame(); configureArenaCombatant(arenaFinalBoss, 30)");
+  assert.equal(game.run("getCombatants().find((enemy) => enemy.active).infected"), true);
+  assert.equal(game.run("arenaFinalBoss.infected"), true);
+  game.run("state.arenaWave = 30; state.arenaBossActive = true; advanceArenaAfterDefeat()");
   assert.equal(game.run("state.cutscenePhase"), "");
   assert.equal(game.run("state.arenaRestRoom && state.arenaFinalBossDefeated"), true);
+  game.run("player.x = arenaContinueGate.x; interact(); draw()");
+  assert.equal(game.run("state.arenaMode"), false);
+  assert.equal(game.run("restartButton.hidden"), false);
 }
 
 {
@@ -354,7 +451,7 @@ function defeatCurrent(game) {
   const game = createGame();
   for (const key of "awdsawdsawds") game.press(key);
   assert.equal(game.run("state.playthrough"), 3);
-  assert.equal(game.run("state.arenaWave"), 50);
+  assert.equal(game.run("state.arenaWave"), 30);
   assert.equal(game.run("state.arenaKillsThisWave"), 0);
   assert.equal(game.run("state.arenaBossActive"), false);
   for (let i = 0; i < 6; i += 1) defeatCurrent(game);
@@ -378,7 +475,7 @@ function defeatCurrent(game) {
 
 {
   const game = createGame();
-  game.run("audioSettings.enabled = false; startNewGame(); jumpToArenaWave50(); state.arenaRestRoom = true; state.arenaFinalBossDefeated = true; state.arenaBestWave = 50; saveGame(false); loadGame()");
+  game.run("audioSettings.enabled = false; startNewGame(); jumpToArenaFinalWave(); state.arenaRestRoom = true; state.arenaFinalBossDefeated = true; state.arenaBestWave = 30; saveGame(false); loadGame()");
   assert.equal(game.run("state.cutscenePhase"), "author");
 }
 
