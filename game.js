@@ -889,7 +889,7 @@ function loadGame() {
       return true;
     }
     if ((state.playthrough === 2 || state.playthrough === 4) && state.authorBossDefeated
-      && (state.trueFinalMap || state.playthrough === 4 && state.worldReturned && !state.arenaMode)) {
+      && (state.trueFinalMap || state.worldReturned && !state.arenaMode)) {
       enterArenaAfterAuthor();
       return true;
     }
@@ -2125,13 +2125,7 @@ function interact() {
       } else if (!state.authorBossDefeated) {
         setMessage("作者鎖住了回歸之門。先躲開彈幕並擊敗他！");
       } else {
-        state.trueFinalMap = false;
-        state.trueFinalExitEntered = true;
-        state.worldReturned = true;
-        state.authorIntroTimer = 0;
-        projectiles.length = 0;
-        keys.clear();
-        setMessage("你擊敗了作者並穿過回歸之門，終於回到正常世界！");
+        enterArenaAfterAuthor();
       }
     } else {
       setMessage(returnDoorUnlocked()
@@ -3217,7 +3211,7 @@ function drawBackground() {
     const chapter = !state.trueFinalBossDefeated ? "擊敗維度之源，解鎖回歸之門"
       : !state.authorRevealed ? "回歸之門已開啟，前往右側按 F"
       : !state.authorBossDefeated ? `${state.playthrough === 4 ? "異變作者" : "作者"}鎖上了門！在 2D 場地中閃避彈幕`
-      : "作者已被擊敗，前往回歸之門按 F";
+      : state.playthrough === 4 ? "異變作者已被擊敗，即將進入五周目競技場" : "作者已被擊敗，即將進入競技場休息室";
     drawText(chapter, 24, 130, 13, "#f7d7f3");
     drawGlow(W / 2, 255, 110, "#e461d8", 0.42);
     ctx.strokeStyle = "#f9a6eb";
@@ -4150,7 +4144,6 @@ function draw() {
     ctx.fillRect(0, 0, W, H);
     drawText("返回正常世界", W / 2, H / 2 - 16, 38, "#8ce0b0", "center");
     drawText(state.authorBossDefeated ? "作者已被擊敗・真正回到正常世界" : state.voidBossDefeated ? "十一張地圖全部完成・終焉核心已重啟" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
-    if (state.playthrough === 2 && state.authorBossDefeated) drawText("按 F 或 Enter 進入競技場，擊敗第 5 波 Boss 前往休息室", W / 2, H / 2 + 57, 15, "#b8ffe1", "center");
   }
   if (state.gameOver) {
     ctx.fillStyle = "#080912e8";

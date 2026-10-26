@@ -82,8 +82,24 @@ function defeatCurrent(game) {
   game.run("authorBoss.hp = 0; update(0.016)");
   assert.equal(game.run("state.arenaMode && state.arenaRestRoom"), true);
   assert.equal(game.run("state.playthrough"), 2);
+  assert.equal(game.run("state.notice.includes('正常世界')"), false);
+  game.run("draw()");
   game.run("player.x = thirdPlaythroughGate.x; interact()");
   assert.equal(game.run("state.playthrough"), 3);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(2); state.trueFinalMap = true; state.trueFinalBossDefeated = true; state.authorRevealed = true; state.authorBossDefeated = true; player.x = trueFinalExit.x; interact()");
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom && !state.trueFinalMap"), true);
+  assert.equal(game.run("state.notice.includes('正常世界')"), false);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(2); state.authorBossDefeated = true; state.authorRevealed = true; state.trueFinalExitEntered = true; state.worldReturned = true; saveGame(false); loadGame()");
+  assert.equal(game.run("state.arenaMode && state.arenaRestRoom && state.playthrough === 2"), true);
+  assert.equal(game.run("state.notice.includes('正常世界')"), false);
 }
 
 {
