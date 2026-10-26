@@ -384,10 +384,42 @@ function defeatCurrent(game) {
   assert.equal(game.run("arenaFinalBoss.infected"), true);
   game.run("state.arenaWave = 30; state.arenaBossActive = true; advanceArenaAfterDefeat()");
   assert.equal(game.run("state.cutscenePhase"), "");
-  assert.equal(game.run("state.arenaRestRoom && state.arenaFinalBossDefeated"), true);
+  assert.equal(game.run("state.challengerBossActive && state.arenaFinalBossDefeated && !state.arenaRestRoom"), true);
+  assert.equal(game.run("arenaChallengeComplete()"), false);
+  assert.equal(game.run("getCombatants().find((enemy) => enemy.active) === challengerBoss"), true);
+  assert.equal(game.run("challengerBoss.infected"), true);
+  game.run("player.x = challengerBoss.x - 60; challengerBoss.attackCooldown = 0; updateEnemy(challengerBoss, 0.016)");
+  assert.equal(game.run("challengerBoss.martialMove"), "jab");
+  game.run("saveGame(false); loadGame(); draw()");
+  assert.equal(game.run("state.challengerBossActive && challengerBoss.active && challengerBoss.martialMove === 'jab'"), true);
+  game.run("player.hp = 100; challengerBoss.attackWindup = 0.001; updateEnemy(challengerBoss, 0.016)");
+  assert.ok(game.run("player.hp") < 100);
+  game.run("challengerBoss.comboIndex = 1; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016)");
+  assert.equal(game.run("challengerBoss.martialMove"), "sweep");
+  game.run("challengerBoss.comboIndex = 2; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016)");
+  assert.equal(game.run("challengerBoss.martialMove"), "kick");
+  game.run("challengerBoss.comboIndex = 3; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016); challengerBoss.attackWindup = 0.001; projectiles.length = 0; updateEnemy(challengerBoss, 0.016)");
+  assert.equal(game.run("projectiles.some((item) => item.source === challengerBoss)"), true);
+  game.run("challengerBoss.hp = 0; update(0.016)");
+  assert.equal(game.run("state.arenaRestRoom && state.challengerBossDefeated && !state.challengerBossActive"), true);
+  assert.equal(game.run("arenaChallengeComplete()"), true);
   game.run("player.x = arenaContinueGate.x; interact(); draw()");
   assert.equal(game.run("state.arenaMode"), false);
   assert.equal(game.run("restartButton.hidden"), false);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.worldReturned = true; state.authorBossDefeated = true; enterArenaMode(); state.arenaWave = 30; state.arenaFinalBossDefeated = true; state.arenaRestRoom = true; saveGame(false); loadGame()");
+  assert.equal(game.run("state.challengerBossActive && challengerBoss.active && !state.arenaRestRoom"), true);
+  game.run("state.gameOver = true; restartArenaAfterDeath()");
+  assert.equal(game.run("state.arenaWave === 0 && state.arenaRestRoom && !state.challengerBossActive && !state.challengerBossDefeated"), true);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); startPlaythrough(4); state.worldReturned = true; state.authorBossDefeated = true; state.trueFinalExitEntered = true; enterArenaMode(); state.arenaWave = 30; state.arenaFinalBossDefeated = true; exitArenaMode(); saveGame(false); loadGame()");
+  assert.equal(game.run("state.arenaMode && state.challengerBossActive && challengerBoss.active"), true);
 }
 
 {
