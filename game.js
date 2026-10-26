@@ -48,8 +48,10 @@ const SHOP_ITEM_NAMES = { armor: "防具", potion: "生命藥水", weapon: "強�
 const SECRET_SEQUENCE = "AAWWDDSS";
 const THIRD_SEQUENCE = "DDDWWWAAASSSAWDS";
 const ARENA_FINAL_SEQUENCE = "AWDSAWDSAWDS";
+const FIFTH_ARENA_FINAL_SEQUENCE = "DWASDWASDWAS";
 const MONEY_SEQUENCE = "AWDSSDWASSDWASSADWSS";
-const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length, ARENA_FINAL_SEQUENCE.length, MONEY_SEQUENCE.length);
+const SECRET_BUFFER_LENGTH = Math.max(SECRET_SEQUENCE.length, THIRD_SEQUENCE.length,
+  ARENA_FINAL_SEQUENCE.length, FIFTH_ARENA_FINAL_SEQUENCE.length, MONEY_SEQUENCE.length);
 const DIMENSION_COOLDOWN = 5;
 const AUTHOR_INTRO_DURATION = 3.5;
 const AUTHOR_RIFT_COLUMNS = [145, 275, 405, 535, 665, 795];
@@ -2011,6 +2013,24 @@ function jumpToArenaFinalWave() {
   spawnNextArenaWave();
   player.hp = player.maxHp;
   setMessage(`密技成功！已到競技場第 ${ARENA_TOTAL_WAVES} 波。先擊敗 5 名敵人，再挑戰最終 Boss。`);
+  saveGame(false);
+}
+
+function jumpToFifthArenaFinalWave() {
+  if (state.playthrough !== 5 || !state.arenaMode) {
+    startPlaythrough(4);
+    state.authorRevealed = true;
+    state.authorBossDefeated = true;
+    state.trueFinalExitEntered = true;
+    state.worldReturned = true;
+    enterArenaMode();
+  } else {
+    enterArenaMode();
+  }
+  state.arenaWave = ARENA_TOTAL_WAVES - 1;
+  spawnNextArenaWave();
+  player.hp = player.maxHp;
+  setMessage(`密技成功！已到五周目感染競技場第 ${ARENA_TOTAL_WAVES} 波。先擊敗 5 名敵人，再挑戰最終 Boss 與格鬥大師挑戰者。`);
   saveGame(false);
 }
 
@@ -4203,6 +4223,12 @@ document.addEventListener("keydown", (event) => {
     if (state.secretBuffer.endsWith(ARENA_FINAL_SEQUENCE)) {
       state.secretBuffer = "";
       jumpToArenaFinalWave();
+      event.preventDefault();
+      return;
+    }
+    if (state.secretBuffer.endsWith(FIFTH_ARENA_FINAL_SEQUENCE)) {
+      state.secretBuffer = "";
+      jumpToFifthArenaFinalWave();
       event.preventDefault();
       return;
     }

@@ -507,6 +507,30 @@ function defeatCurrent(game) {
 
 {
   const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); player.money = 123");
+  for (const key of "dwasdwasdwas") game.press(key);
+  assert.equal(game.run("state.playthrough"), 5);
+  assert.equal(game.run("state.arenaMode && !state.arenaRestRoom && state.arenaWave === 30"), true);
+  assert.equal(game.run("state.arenaKillsThisWave === 0 && !state.arenaBossActive && !state.challengerBossActive"), true);
+  assert.equal(game.run("player.money"), 123);
+  assert.equal(game.run("getCombatants().find((enemy) => enemy.active).infected"), true);
+  game.run("saveGame(false); loadGame()");
+  assert.equal(game.run("state.playthrough === 5 && state.arenaWave === 30"), true);
+  for (let i = 0; i < 5; i += 1) defeatCurrent(game);
+  assert.equal(game.run("state.arenaBossActive && getCombatants().find((enemy) => enemy.active) === arenaFinalBoss"), true);
+  defeatCurrent(game);
+  assert.equal(game.run("state.challengerBossActive && getCombatants().find((enemy) => enemy.active) === challengerBoss"), true);
+}
+
+{
+  const game = createGame();
+  for (const key of "dwasdwasdwas") game.press(key);
+  assert.equal(game.run("gameContent.hidden"), false);
+  assert.equal(game.run("state.playthrough === 5 && state.arenaWave === 30"), true);
+}
+
+{
+  const game = createGame();
   game.run("audioSettings.enabled = false; startNewGame(); jumpToArenaFinalWave(); state.arenaRestRoom = true; state.arenaFinalBossDefeated = true; state.arenaBestWave = 30; saveGame(false); loadGame()");
   assert.equal(game.run("state.cutscenePhase"), "author");
 }

@@ -72,6 +72,7 @@ python -m http.server 8000
 | `AAWWDDSS` | 前往二周目 |
 | `DDDWWWAAASSSAWDS` | 抵達競技場休息室的三周目之門 |
 | `AWDSAWDSAWDS` | 直接前往競技場第 30 波 |
+| `DWASDWASDWAS` | 直接前往五周目感染競技場第 30 波 |
 | `AWDSSDWASSDWASSADWSS` | 獲得 200,000 金幣；需在遊戲畫面中輸入 |
 
 ## 存檔與測試
