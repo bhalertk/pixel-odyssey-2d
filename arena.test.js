@@ -8,10 +8,13 @@ function createGame(storage = new Map()) {
   const touchButtons = new Map();
   for (const control of ["a", "w", "s", "d", "e", "attack", "c", "f", "r", "t", "q", "z", "b", "shop", "g", "save", "load", "p", "x", "fullscreen"]) {
     const handlers = new Map();
+    const captures = new Set();
     touchButtons.set(control, {
       dataset: { control },
       addEventListener: (name, handler) => handlers.set(name, handler),
-      trigger: (name) => handlers.get(name)?.({ preventDefault() {} }),
+      setPointerCapture: (pointer) => captures.add(pointer),
+      hasPointerCapture: (pointer) => captures.has(pointer),
+      trigger: (name, details = {}) => handlers.get(name)?.({ preventDefault() {}, ...details }),
     });
   }
   const drawing = new Proxy({}, {
@@ -58,7 +61,7 @@ function createGame(storage = new Map()) {
   return {
     run: (source) => vm.runInContext(source, sandbox),
     press: (key) => listeners.get("keydown")({ key, repeat: false, preventDefault() {} }),
-    touch: (control, event = "click") => touchButtons.get(control).trigger(event),
+    touch: (control, event = "click", details = {}) => touchButtons.get(control).trigger(event, details),
     storage,
   };
 }
@@ -442,7 +445,8 @@ function defeatCurrent(game) {
   assert.equal(game.run("player.hp"), game.run("player.maxHp"));
   game.run("switchDimension(); update(0.016); draw()");
   assert.equal(game.run("state.dimension"), "2D");
-  for (const [index, pattern, count] of [[0, "fan", 5], [1, "cross", 4], [2, "pulse", 12], [3, "cage", 15], [4, "eclipse", 16]]) {
+  assert.ok(Math.abs(game.run("bagBoss.damage") - 2.9) < 0.0001);
+  for (const [index, pattern, count] of [[0, "fan", 7], [1, "cross", 8], [2, "pulse", 18], [3, "cage", 25], [4, "eclipse", 24]]) {
     game.run(`bagBoss.comboIndex = ${index}; bagBoss.attackCooldown = 0; bagBoss.attackWindup = 0; updateEnemy(bagBoss, 0.016)`);
     assert.equal(game.run("bagBoss.bagPattern"), pattern);
     game.run("saveGame(false); loadGame()");
@@ -450,6 +454,7 @@ function defeatCurrent(game) {
     game.run("bagBoss.attackWindup = 0.001; projectiles.length = 0; draw(); updateEnemy(bagBoss, 0.016)");
     assert.equal(game.run("projectiles.length"), count);
     assert.equal(game.run("projectiles.every((item) => Number.isFinite(item.vx) && Number.isFinite(item.vy))"), true);
+    assert.equal(game.run("projectiles.every((item) => Math.abs(item.damage - bagBoss.damage * (['cage', 'eclipse'].includes(bagBoss.bagPattern) ? 1.2 : 1)) < 0.0001)"), true);
     if (pattern === "cage") {
       assert.equal(game.run("projectiles.every((item) => Math.abs(item.x - bagBoss.attackTargetX) > 35)"), true);
     }
@@ -479,6 +484,39 @@ function defeatCurrent(game) {
   game.run("audioSettings.enabled = false; startNewGame(); jumpToFifthArenaFinalWave(); state.challengerBossDefeated = true; state.bagBossDefeated = true; exitArenaMode(); saveGame(false); loadGame()");
   assert.equal(game.run("state.cutscenePhase"), "end_return");
   assert.equal(game.run("state.worldReturned"), false);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); state.dimension = '2D'; player.hp = 1; player.potions = 2");
+  game.touch("d", "pointerdown", { pointerId: 1 });
+  game.touch("d", "pointerdown", { pointerId: 2 });
+  game.touch("d", "pointerup", { pointerId: 1 });
+  assert.equal(game.run("keys.has('d')"), true);
+  game.touch("d", "pointerleave", { pointerId: 2 });
+  assert.equal(game.run("keys.has('d')"), true);
+  game.touch("w", "pointerdown", { pointerId: 3 });
+  game.touch("e", "pointerdown", { pointerId: 4 });
+  assert.equal(game.run("keys.has('w') && keys.has('d') && state.shieldTimer > 0"), true);
+  game.touch("r", "pointerdown", { pointerId: 5 });
+  game.touch("r", "click", { detail: 1 });
+  assert.equal(game.run("player.potions"), 1);
+  game.touch("d", "pointercancel", { pointerId: 2 });
+  game.touch("w", "lostpointercapture", { pointerId: 3 });
+  assert.equal(game.run("keys.has('w') || keys.has('d')"), false);
+  game.run("beginBagFinale(); draw()");
+  assert.match(game.run("mobileDialogueText.textContent"), /我知道你一定會來/);
+  assert.equal(game.run("mobileDialogue.hidden || !mobileDialogueNext.hidden"), false);
+  game.run("state.cutscenePhase = 'author'; state.notice = '已讀取進度'; draw()");
+  assert.match(game.run("mobileDialogueText.textContent"), /你以為你能殺死我/);
+  game.run("state.cutscenePhase = ''; state.playthrough = 3; state.arenaRestRoom = true; state.challengerDialogOpen = true; player.x = challenger.x; draw()");
+  assert.equal(game.run("mobileDialogueNext.hidden"), false);
+  game.touch("f", "pointerdown", { pointerId: 6 });
+  game.touch("f", "click", { detail: 1 });
+  assert.equal(game.run("state.challengerDialogOpen"), false);
+  game.touch("a", "pointerdown", { pointerId: 7 });
+  game.run("clearTouchInput()");
+  assert.equal(game.run("touchMovementPointers.size === 0 && keys.size === 0"), true);
 }
 
 for (const outsideArena of [false, true]) {

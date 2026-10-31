@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Pixel Odyssey 2D - 開場原型</title>
-    <link rel="stylesheet" href="style.css?v=20260927b" />
+    <link rel="stylesheet" href="style.css?v=20261031mobile" />
   </head>
   <body>
     <main class="game-shell">
@@ -27,6 +27,7 @@
           <span>左鍵攻擊（間隔 1 秒）・E 舉盾 0.3 秒（間隔 1 秒）</span>
           <span>C 切換 2D・F 對話／互動・H 商店・G 賭錢</span>
           <span>R 使用生命藥水・X 重新開始；競技場死亡後自動返回休息室</span>
+          <span>手機／平板：使用螢幕方向鍵、攻擊、舉盾與互動按鈕，可同時多指操作。</span>
         </div>
         <div class="audio-settings">
           <label><input id="menu-sound-enabled" type="checkbox" checked /> 開啟音效</label>
@@ -46,6 +47,10 @@
       <p class="orientation-hint">橫向遊玩可看得更清楚，也能同時使用移動與攻擊按鈕。</p>
       <section class="game-frame">
         <canvas id="game" width="960" height="540" aria-label="遊戲畫面"></canvas>
+        <section id="mobile-dialogue" class="mobile-dialogue" aria-label="劇情與對話" hidden>
+          <p id="mobile-dialogue-text" role="status"></p>
+          <button id="mobile-dialogue-next" type="button" data-control="f">繼續／關閉對話</button>
+        </section>
         <p id="mobile-message" class="mobile-message" role="status" hidden></p>
         <div class="controls">
           <span><b>A / D</b> 移動</span>
@@ -103,6 +108,7 @@
         <label><input id="glasses-enabled" type="checkbox" /> 眼鏡</label>
       </section>
       <section id="shop" class="shop" hidden aria-label="補給商店">
+        <button type="button" id="close-shop" aria-label="關閉補給商店">關閉商店</button>
         <strong>補給商店：用金錢換取冒險物資</strong>
         <button data-item="armor">防具（45 金）</button>
         <button data-item="potion">生命藥水（30 金）</button>
@@ -116,6 +122,7 @@
         <button data-item="core">護盾晶核（50 金）</button>
       </section>
       <section id="betting" class="shop betting" hidden aria-label="賭錢遊戲">
+        <button type="button" id="close-betting" aria-label="關閉賭桌">關閉賭桌</button>
         <strong>幸運硬幣：猜正反</strong>
         <label>下注 <input id="bet-amount" type="number" min="1" value="10" /></label>
         <button data-guess="正面">猜正面</button>
@@ -133,6 +140,6 @@
       <p id="message" class="message">前往老人身邊，按 <b>F</b> 開始對話。</p>
       </section>
     </main>
-    <script src="game.js?v=20260927c"></script>
+    <script src="game.js?v=20261031mobile"></script>
   </body>
 </html>

@@ -10,6 +10,10 @@ ctx.imageSmoothingEnabled = false;
 canvas.tabIndex = 0;
 const message = document.querySelector("#message");
 const mobileMessage = document.querySelector("#mobile-message");
+const gameFrame = document.querySelector(".game-frame");
+const mobileDialogue = document.querySelector("#mobile-dialogue");
+const mobileDialogueText = document.querySelector("#mobile-dialogue-text");
+const mobileDialogueNext = document.querySelector("#mobile-dialogue-next");
 const bodyColorInput = document.querySelector("#body-color");
 const eyeColorInput = document.querySelector("#eye-color");
 const pantsColorInput = document.querySelector("#pants-color");
@@ -82,6 +86,7 @@ const ENDING_STORY = [
 const audioSettings = { enabled: true, volume: 0.6 };
 
 const keys = new Set();
+const touchMovementPointers = new Map();
 const projectiles = [];
 const particles = [];
 const floatingTexts = [];
@@ -243,7 +248,7 @@ const challengerBoss = {
 const bagBoss = {
   type: "感染之源：bag", attackType: "bag", color: "#c74d99",
   x: 730, y: 370, size: 64, hp: 96, maxHp: 96, speed: 0.65,
-  range: 900, cooldown: 1.6, damage: 1.4, startX: 730, startY: 370,
+  range: 900, cooldown: 1.6, damage: 1.9, startX: 730, startY: 370,
   active: false, attackCooldown: 1.6, attackWindup: 0, stunned: 0, hitFlash: 0,
   comboIndex: 0, bagPattern: "fan",
 };
@@ -2771,36 +2776,39 @@ function fireMartialMove(enemy) {
 
 function fireBagPattern(enemy) {
   const fire = (x, y, vx, vy) => projectiles.push({ x, y, vx, vy,
-    damage: enemy.damage, color: "#f380c7", source: enemy, radius: 8 });
+    damage: enemy.damage * (["cage", "eclipse"].includes(enemy.bagPattern) ? 1.2 : 1),
+    color: "#f380c7", source: enemy, radius: 8 });
   const tx = enemy.attackTargetX ?? player.x;
   const ty = enemy.attackTargetY ?? player.y;
   if (enemy.bagPattern === "cage") {
     const safeColumn = AUTHOR_RIFT_COLUMNS.reduce((closest, x, index) => Math.abs(x - tx) < Math.abs(AUTHOR_RIFT_COLUMNS[closest] - tx) ? index : closest, 0);
     AUTHOR_RIFT_COLUMNS.forEach((x, index) => {
       if (index === safeColumn) return;
-      [-18, 0, 18].forEach((offset) => fire(x + offset, 85, 0, 3.6 + (offset + 18) / 30));
+      [-24, -12, 0, 12, 24].forEach((offset) => fire(x + offset, 85, 0, 3.6 + (offset + 24) / 40));
     });
     setMessage("bag：感染牢籠！移到沒有預警線的安全通道！");
   } else if (enemy.bagPattern === "eclipse") {
-    for (let i = 0; i < 16; i += 1) {
-      const angle = i * Math.PI / 8;
+    for (let i = 0; i < 24; i += 1) {
+      const angle = i * Math.PI / 12;
       const speed = i % 2 ? 3.2 : 4.4;
       fire(enemy.x, enemy.y, Math.cos(angle) * speed, Math.sin(angle) * speed);
     }
     setMessage("bag：終蝕彈幕！留意交錯快慢的彈道！");
   } else if (enemy.bagPattern === "cross") {
-    fire(24, ty, 4.2, 0); fire(W - 24, ty, -4.2, 0);
-    fire(tx, 85, 0, 3.8); fire(tx, H - 35, 0, -3.8);
+    [-22, 22].forEach((offset) => {
+      fire(24, ty + offset, 4.2, 0); fire(W - 24, ty + offset, -4.2, 0);
+      fire(tx + offset, 85, 0, 3.8); fire(tx + offset, H - 35, 0, -3.8);
+    });
     setMessage("bag：感染十字！離開預警線的交會處。");
   } else if (enemy.bagPattern === "pulse") {
-    for (let i = 0; i < 12; i += 1) {
-      const angle = i * Math.PI / 6;
+    for (let i = 0; i < 18; i += 1) {
+      const angle = i * Math.PI / 9;
       fire(enemy.x, enemy.y, Math.cos(angle) * 3.6, Math.sin(angle) * 3.6);
     }
     setMessage("bag：暗黑脈衝！從環形彈幕的空隙穿過。");
   } else {
     const aim = Math.atan2(ty - enemy.y, tx - enemy.x);
-    [-0.48, -0.24, 0, 0.24, 0.48].forEach((offset) => {
+    [-0.54, -0.36, -0.18, 0, 0.18, 0.36, 0.54].forEach((offset) => {
       fire(enemy.x, enemy.y, Math.cos(aim + offset) * 4.4, Math.sin(aim + offset) * 4.4);
     });
     setMessage("bag：腐蝕扇擊！沿彈幕兩側閃避。");
@@ -3768,8 +3776,10 @@ function drawEnemy() {
           ctx.moveTo(x, 85); ctx.lineTo(x, H - 35);
         });
       } else if (enemy.bagPattern === "cross") {
-        ctx.moveTo(24, ty); ctx.lineTo(W - 24, ty);
-        ctx.moveTo(tx, 85); ctx.lineTo(tx, H - 35);
+        [-22, 22].forEach((offset) => {
+          ctx.moveTo(24, ty + offset); ctx.lineTo(W - 24, ty + offset);
+          ctx.moveTo(tx + offset, 85); ctx.lineTo(tx + offset, H - 35);
+        });
       } else if (enemy.bagPattern === "pulse" || enemy.bagPattern === "eclipse") {
         ctx.arc(enemy.x, enemy.y, 110, 0, Math.PI * 2);
       } else {
@@ -4497,7 +4507,32 @@ function drawArenaFinale() {
   ctx.restore();
 }
 
+function syncMobileDialogue() {
+  const scene = [...BAG_STORY, ...ENDING_STORY].find((item) => item.phase === state.cutscenePhase);
+  const arenaSceneText = {
+    author: "作者：「你以為你能殺死我？」",
+    push: "挑戰者把你推進電梯：「快進電梯！這裡交給我。」",
+    stand: "挑戰者：「你先走。這次換我獨自面對作者。」",
+    light: "電梯頂端的光照向主角，第四次旅程即將開始。",
+  }[state.cutscenePhase];
+  let dialogue = state.endingCompleted ? "主角回到正常世界。劇終。謝謝你陪伴主角與朋友們走完這段旅程。"
+    : scene?.text || arenaSceneText || (state.cutscenePhase ? state.notice : "");
+  const automatic = Boolean(state.endingCompleted || state.cutscenePhase || state.trueFinalMap && state.authorIntroTimer > 0);
+  if (state.challengerDialogOpen) dialogue = getChallengerDialogue();
+  else if (state.dialog) dialogue = getElderLessons()[state.tutorialStep] || state.notice;
+  else if (state.trueFinalMap && state.authorIntroTimer > 0) {
+    dialogue = state.playthrough === 4 && state.authorIntroTimer <= AUTHOR_INTRO_DURATION / 2
+      ? "神秘物質湧入作者！作者：「我獲得了新力量，現在由我改寫戰場！」"
+      : "老人現出作者身分：「我是作者，你只是個工具人。回歸之門由我鎖上！」";
+  }
+  mobileDialogue.hidden = !dialogue;
+  if (mobileDialogueText.textContent !== dialogue) mobileDialogueText.textContent = dialogue;
+  mobileDialogueNext.hidden = automatic;
+  gameFrame.dataset.dialogue = String(Boolean(dialogue));
+}
+
 function draw() {
+  syncMobileDialogue();
   syncRestartControl();
   if (state.endingCompleted) {
     drawEnding();
@@ -4704,8 +4739,19 @@ document.addEventListener("keydown", (event) => {
   if (key === "b") useSpecialItem("core");
 });
 document.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
-window.addEventListener("blur", () => keys.clear());
-document.addEventListener("visibilitychange", () => { if (document.hidden) keys.clear(); });
+function clearTouchInput() {
+  touchMovementPointers.clear();
+  keys.clear();
+}
+window.addEventListener("blur", clearTouchInput);
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearTouchInput(); });
+window.addEventListener("resize", clearTouchInput);
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+  event.preventDefault();
+  canvas.focus();
+  if (!gameContent.hidden && !state.paused) attackOrParry();
+});
 canvas.addEventListener("mousedown", (event) => {
   canvas.focus();
   if (state.paused) return;
@@ -4718,24 +4764,38 @@ canvas.addEventListener("click", () => {
 document.querySelectorAll("[data-control]").forEach((button) => {
   const control = button.dataset.control;
   const movement = ["a", "w", "s", "d"].includes(control);
+  let pointerActionHandled = false;
   const press = (event) => {
     event.preventDefault();
-    if (!movement || gameContent.hidden || state.gameOver || state.paused || state.cutscenePhase) return;
+    if (!movement) {
+      pointerActionHandled = true;
+      activate();
+      return;
+    }
+    if (gameContent.hidden || state.gameOver || state.paused || state.cutscenePhase || state.dialog || state.challengerDialogOpen) return;
+    const pointer = event.pointerId ?? control;
+    touchMovementPointers.set(pointer, control);
+    if (event.pointerId !== undefined) button.setPointerCapture?.(event.pointerId);
     keys.add(control);
   };
   const release = (event) => {
     event.preventDefault();
-    if (movement) keys.delete(control);
+    if (!movement) return;
+    touchMovementPointers.delete(event.pointerId ?? control);
+    if (![...touchMovementPointers.values()].includes(control)) keys.delete(control);
   };
   button.addEventListener("pointerdown", press);
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
-  button.addEventListener("pointerleave", release);
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
+  button.addEventListener("lostpointercapture", release);
+  button.addEventListener("pointerleave", (event) => {
+    if (!button.hasPointerCapture?.(event.pointerId)) release(event);
+  });
+  const activate = () => {
     if (control === "fullscreen") {
       if (document.fullscreenElement) document.exitFullscreen?.();
       else if (gameContent.requestFullscreen) gameContent.requestFullscreen().catch(() => setMessage("無法進入全螢幕，請手動旋轉裝置遊玩。"));
+      else if (gameContent.webkitRequestFullscreen) gameContent.webkitRequestFullscreen();
       else setMessage("此瀏覽器不支援全螢幕，仍可直接遊玩。");
       return;
     }
@@ -4755,8 +4815,18 @@ document.querySelectorAll("[data-control]").forEach((button) => {
     else if ({ t: "power", q: "bomb", z: "compass", b: "core" }[control]) {
       useSpecialItem({ t: "power", q: "bomb", z: "compass", b: "core" }[control]);
     }
+  };
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (pointerActionHandled && event.detail !== 0) {
+      pointerActionHandled = false;
+      return;
+    }
+    activate();
   });
 });
+document.querySelector("#close-shop").addEventListener("click", () => { shop.hidden = true; });
+document.querySelector("#close-betting").addEventListener("click", () => { betting.hidden = true; });
 bodyColorInput.addEventListener("input", () => {
   state.bodyColor = bodyColorInput.value;
   setMessage("身體顏色已更新。");
@@ -4787,11 +4857,11 @@ glassesInput.addEventListener("change", () => {
 });
 shop.addEventListener("click", (event) => {
   const button = event.target.closest("button");
-  if (button) buyItem(button.dataset.item);
+  if (button?.dataset.item) buyItem(button.dataset.item);
 });
 betting.addEventListener("click", (event) => {
   const button = event.target.closest("button");
-  if (button) placeBet(button.dataset.guess);
+  if (button?.dataset.guess) placeBet(button.dataset.guess);
 });
 restartButton.addEventListener("click", () => {
   restartFromControl();
