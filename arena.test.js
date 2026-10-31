@@ -404,6 +404,7 @@ function defeatCurrent(game) {
   assert.equal(game.run("arenaChallengeComplete()"), false);
   assert.equal(game.run("getCombatants().find((enemy) => enemy.active) === challengerBoss"), true);
   assert.equal(game.run("challengerBoss.infected"), true);
+  assert.equal(game.run("challengerBoss.maxHp"), 170);
   game.run("player.x = challengerBoss.x - 60; challengerBoss.attackCooldown = 0; updateEnemy(challengerBoss, 0.016)");
   assert.equal(game.run("challengerBoss.martialMove"), "jab");
   game.run("saveGame(false); loadGame(); draw()");
@@ -416,6 +417,15 @@ function defeatCurrent(game) {
   assert.equal(game.run("challengerBoss.martialMove"), "kick");
   game.run("challengerBoss.comboIndex = 3; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016); challengerBoss.attackWindup = 0.001; projectiles.length = 0; updateEnemy(challengerBoss, 0.016)");
   assert.equal(game.run("projectiles.some((item) => item.source === challengerBoss)"), true);
+  for (const [index, move, count] of [[4, "dragon", 3], [5, "quake", 2]]) {
+    game.run(`challengerBoss.comboIndex = ${index}; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016)`);
+    assert.equal(game.run("challengerBoss.martialMove"), move);
+    game.run("saveGame(false); loadGame(); draw()");
+    assert.equal(game.run("challengerBoss.martialMove"), move);
+    game.run("projectiles.length = 0; challengerBoss.attackWindup = 0.001; updateEnemy(challengerBoss, 0.016)");
+    assert.equal(game.run("projectiles.length"), count);
+    assert.ok(game.run("challengerBoss.attackCooldown") >= 1.8);
+  }
   game.run("challengerBoss.hp = 0; update(0.016)");
   assert.equal(game.run("!state.arenaRestRoom && state.challengerBossDefeated && !state.challengerBossActive"), true);
   assert.equal(game.run("challengerBoss.infected"), false);
@@ -427,11 +437,12 @@ function defeatCurrent(game) {
     game.run("update(4.1)");
   }
   assert.equal(game.run("state.bagBossActive && bagBoss.active && state.arenaMode"), true);
+  assert.equal(game.run("bagBoss.maxHp"), 194);
   assert.equal(game.run("state.dimension"), "2D");
   assert.equal(game.run("player.hp"), game.run("player.maxHp"));
   game.run("switchDimension(); update(0.016); draw()");
   assert.equal(game.run("state.dimension"), "2D");
-  for (const [index, pattern, count] of [[0, "fan", 5], [1, "cross", 4], [2, "pulse", 12]]) {
+  for (const [index, pattern, count] of [[0, "fan", 5], [1, "cross", 4], [2, "pulse", 12], [3, "cage", 15], [4, "eclipse", 16]]) {
     game.run(`bagBoss.comboIndex = ${index}; bagBoss.attackCooldown = 0; bagBoss.attackWindup = 0; updateEnemy(bagBoss, 0.016)`);
     assert.equal(game.run("bagBoss.bagPattern"), pattern);
     game.run("saveGame(false); loadGame()");
@@ -439,14 +450,35 @@ function defeatCurrent(game) {
     game.run("bagBoss.attackWindup = 0.001; projectiles.length = 0; draw(); updateEnemy(bagBoss, 0.016)");
     assert.equal(game.run("projectiles.length"), count);
     assert.equal(game.run("projectiles.every((item) => Number.isFinite(item.vx) && Number.isFinite(item.vy))"), true);
+    if (pattern === "cage") {
+      assert.equal(game.run("projectiles.every((item) => Math.abs(item.x - bagBoss.attackTargetX) > 35)"), true);
+    }
   }
   game.run("bagBoss.hp -= 7; saveGame(false); loadGame(); draw()");
-  assert.equal(game.run("state.bagBossActive && bagBoss.hp === bagBoss.maxHp - 7 && bagBoss.bagPattern === 'pulse'"), true);
+  assert.equal(game.run("state.bagBossActive && bagBoss.hp === bagBoss.maxHp - 7 && bagBoss.bagPattern === 'eclipse'"), true);
   defeatCurrent(game);
-  assert.equal(game.run("state.bagBossDefeated && state.worldReturned && !state.arenaMode"), true);
+  assert.equal(game.run("state.bagBossDefeated && !state.worldReturned && state.arenaMode"), true);
+  for (const phase of ["end_return", "end_collapse", "end_rescue", "end_color", "end_bond", "end_door", "end_farewell", "end_walk"]) {
+    assert.equal(game.run("state.cutscenePhase"), phase);
+    assert.equal(game.run("state.worldReturned || state.endingCompleted"), false);
+    game.run("draw(); saveGame(false); loadGame()");
+    assert.equal(game.run("state.cutscenePhase"), phase);
+    game.run("update(4.1)");
+  }
+  assert.equal(game.run("state.endingCompleted && state.worldReturned && !state.arenaMode"), true);
   game.run("saveGame(false); loadGame(); draw()");
+  game.press("Enter");
+  game.run("interact()");
+  assert.equal(game.run("state.endingCompleted"), true);
   assert.equal(game.run("state.arenaMode"), false);
   assert.equal(game.run("restartButton.hidden"), false);
+}
+
+{
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); jumpToFifthArenaFinalWave(); state.challengerBossDefeated = true; state.bagBossDefeated = true; exitArenaMode(); saveGame(false); loadGame()");
+  assert.equal(game.run("state.cutscenePhase"), "end_return");
+  assert.equal(game.run("state.worldReturned"), false);
 }
 
 for (const outsideArena of [false, true]) {
