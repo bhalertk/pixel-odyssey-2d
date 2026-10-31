@@ -417,11 +417,47 @@ function defeatCurrent(game) {
   game.run("challengerBoss.comboIndex = 3; challengerBoss.attackCooldown = 0; challengerBoss.attackWindup = 0; updateEnemy(challengerBoss, 0.016); challengerBoss.attackWindup = 0.001; projectiles.length = 0; updateEnemy(challengerBoss, 0.016)");
   assert.equal(game.run("projectiles.some((item) => item.source === challengerBoss)"), true);
   game.run("challengerBoss.hp = 0; update(0.016)");
-  assert.equal(game.run("state.arenaRestRoom && state.challengerBossDefeated && !state.challengerBossActive"), true);
-  assert.equal(game.run("arenaChallengeComplete()"), true);
-  game.run("player.x = arenaContinueGate.x; interact(); draw()");
+  assert.equal(game.run("!state.arenaRestRoom && state.challengerBossDefeated && !state.challengerBossActive"), true);
+  assert.equal(game.run("challengerBoss.infected"), false);
+  assert.equal(game.run("arenaChallengeComplete()"), false);
+  for (const phase of ["bag_friend", "bag_arrival", "bag_weapon", "bag_taunt", "bag_throw", "bag_cheer", "bag_pull", "bag_declare"]) {
+    assert.equal(game.run("state.cutscenePhase"), phase);
+    game.run("draw(); saveGame(false); loadGame()");
+    assert.equal(game.run("state.cutscenePhase"), phase);
+    game.run("update(4.1)");
+  }
+  assert.equal(game.run("state.bagBossActive && bagBoss.active && state.arenaMode"), true);
+  assert.equal(game.run("state.dimension"), "2D");
+  assert.equal(game.run("player.hp"), game.run("player.maxHp"));
+  game.run("switchDimension(); update(0.016); draw()");
+  assert.equal(game.run("state.dimension"), "2D");
+  for (const [index, pattern, count] of [[0, "fan", 5], [1, "cross", 4], [2, "pulse", 12]]) {
+    game.run(`bagBoss.comboIndex = ${index}; bagBoss.attackCooldown = 0; bagBoss.attackWindup = 0; updateEnemy(bagBoss, 0.016)`);
+    assert.equal(game.run("bagBoss.bagPattern"), pattern);
+    game.run("saveGame(false); loadGame()");
+    assert.equal(game.run("bagBoss.bagPattern"), pattern);
+    game.run("bagBoss.attackWindup = 0.001; projectiles.length = 0; draw(); updateEnemy(bagBoss, 0.016)");
+    assert.equal(game.run("projectiles.length"), count);
+    assert.equal(game.run("projectiles.every((item) => Number.isFinite(item.vx) && Number.isFinite(item.vy))"), true);
+  }
+  game.run("bagBoss.hp -= 7; saveGame(false); loadGame(); draw()");
+  assert.equal(game.run("state.bagBossActive && bagBoss.hp === bagBoss.maxHp - 7 && bagBoss.bagPattern === 'pulse'"), true);
+  defeatCurrent(game);
+  assert.equal(game.run("state.bagBossDefeated && state.worldReturned && !state.arenaMode"), true);
+  game.run("saveGame(false); loadGame(); draw()");
   assert.equal(game.run("state.arenaMode"), false);
   assert.equal(game.run("restartButton.hidden"), false);
+}
+
+for (const outsideArena of [false, true]) {
+  const game = createGame();
+  game.run("audioSettings.enabled = false; startNewGame(); jumpToFifthArenaFinalWave(); state.arenaFinalBossDefeated = true; state.challengerBossDefeated = true; state.arenaRestRoom = true");
+  if (outsideArena) game.run("exitArenaMode()");
+  game.run("saveGame(false); loadGame()");
+  assert.equal(game.run("state.cutscenePhase"), "bag_friend");
+  assert.equal(game.run("state.arenaWave"), 30);
+  game.run("startBagBoss(); player.hp = 0.5; projectiles.push({ x: player.x, y: player.y, vx: 0, vy: 0, damage: 1, source: bagBoss }); update(0.016)");
+  assert.equal(game.run("state.arenaRestRoom && state.arenaWave === 0 && !state.bagBossActive && !state.bagBossDefeated && !bagBoss.active"), true);
 }
 
 {

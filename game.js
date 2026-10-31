@@ -59,6 +59,16 @@ const ARENA_TOTAL_WAVES = 30;
 const ARENA_ENEMIES_PER_WAVE = 5;
 const ELEVATOR_TOTAL_WAVES = 5;
 const ELEVATOR_ENEMIES_PER_WAVE = 5;
+const BAG_STORY = [
+  { phase: "bag_friend", duration: 3.6, text: "挑戰者恢復正常：「我知道你一定會來的，朋友。」" },
+  { phase: "bag_arrival", duration: 3.6, text: "讓世界感染的幕後黑手 bag 現身：「真厲害呀，小子。」" },
+  { phase: "bag_weapon", duration: 2.4, text: "主角拿出武器，與挑戰者一起面向 bag。" },
+  { phase: "bag_taunt", duration: 4, text: "bag：「看來你還挺有趣的，但是 2 打 1 不公平吧？」" },
+  { phase: "bag_throw", duration: 2.6, text: "bag 突然出手，把挑戰者打進電梯！" },
+  { phase: "bag_cheer", duration: 3.8, text: "挑戰者：「加油，朋友！你一定能打敗他，回到正常世界！」" },
+  { phase: "bag_pull", duration: 3, text: "電梯關閉。bag 把主角拉進全黑的房間。" },
+  { phase: "bag_declare", duration: 3.6, text: "bag：「我向你宣戰！打敗我，你才能回到正常世界。」" },
+];
 const audioSettings = { enabled: true, volume: 0.6 };
 
 const keys = new Set();
@@ -220,6 +230,13 @@ const challengerBoss = {
   active: false, attackCooldown: 1.25, attackWindup: 0, stunned: 0, hitFlash: 0,
   martialMove: "jab", comboIndex: 0,
 };
+const bagBoss = {
+  type: "感染之源：bag", attackType: "bag", color: "#c74d99",
+  x: 730, y: 370, size: 64, hp: 48, maxHp: 48, speed: 0.65,
+  range: 900, cooldown: 1.6, damage: 1.4, startX: 730, startY: 370,
+  active: false, attackCooldown: 1.6, attackWindup: 0, stunned: 0, hitFlash: 0,
+  comboIndex: 0, bagPattern: "fan",
+};
 const enemies = [
   { type: "追獵者", attackType: "melee", color: "#b54868", x: 390, y: 370, size: 28, hp: 3, maxHp: 3, speed: 1.05, range: 78, cooldown: 1.5, damage: 1 },
   { type: "迅捷者", attackType: "dash", color: "#d77b45", x: 500, y: 370, size: 23, hp: 2, maxHp: 2, speed: 1.75, range: 65, cooldown: 1.1, damage: 1 },
@@ -260,7 +277,7 @@ const thirdPlaythroughGate = { x: 480, y: 370 };
 const challenger = { x: 230, y: 370 };
 const allCombatants = [
   ...enemies, ...bosses, ruinEnemy, sanctumEnemy, ...frostEnemies, voidBoss,
-  ...extraMaps.flatMap((map) => [map.enemy, map.boss]), ...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss, challengerBoss,
+  ...extraMaps.flatMap((map) => [map.enemy, map.boss]), ...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss, challengerBoss, bagBoss,
   trueFinalBoss, authorBoss, infectedMerchant,
 ];
 const attackStyleCounts = new Map();
@@ -360,6 +377,7 @@ const state = {
   arenaKillsThisWave: 0,
   arenaFinalBossDefeated: false,
   challengerBossActive: false, challengerBossDefeated: false,
+  bagBossActive: false, bagBossDefeated: false,
   arenaBestWave: 0,
   challengerDialogOpen: false,
   cutscenePhase: "", cutsceneTimer: 0,
@@ -490,6 +508,7 @@ function saveGame(announce = true) {
       arenaFinalBossDefeated: state.arenaFinalBossDefeated,
       challengerBossActive: state.challengerBossActive,
       challengerBossDefeated: state.challengerBossDefeated,
+      bagBossActive: state.bagBossActive, bagBossDefeated: state.bagBossDefeated,
       arenaBestWave: state.arenaBestWave,
       challengerDialogOpen: state.challengerDialogOpen,
       cutscenePhase: state.cutscenePhase, cutsceneTimer: state.cutsceneTimer,
@@ -560,6 +579,7 @@ function saveGame(announce = true) {
       stunned: arenaCombatant.stunned, attackTargetX: arenaCombatant.attackTargetX,
       attackTargetY: arenaCombatant.attackTargetY,
       martialMove: arenaCombatant.martialMove, comboIndex: arenaCombatant.comboIndex,
+      bagPattern: arenaCombatant.bagPattern,
     } : null,
     extraMaps: extraMaps.map((map) => ({
       enemy: { x: map.enemy.x, y: map.enemy.y, hp: map.enemy.hp, active: map.enemy.active, attackCooldown: map.enemy.attackCooldown },
@@ -582,6 +602,7 @@ function restoreCombatant(target, saved) {
     if (Number.isFinite(saved[key])) target[key] = saved[key];
   });
   if (["jab", "sweep", "kick", "ki"].includes(saved.martialMove)) target.martialMove = saved.martialMove;
+  if (["fan", "cross", "pulse"].includes(saved.bagPattern)) target.bagPattern = saved.bagPattern;
   // 平衡更新後，舊存檔不可讓生命值超過新的上限。
   if (Number.isFinite(target.maxHp)) target.hp = Math.min(target.hp, target.maxHp);
   if (typeof saved.active === "boolean") target.active = saved.active;
@@ -636,6 +657,9 @@ function loadGame() {
       && state.arenaKillsThisWave === ARENA_ENEMIES_PER_WAVE && Boolean(save.state.arenaBossActive);
     state.arenaFinalBossDefeated = Boolean(save.state.arenaFinalBossDefeated);
     state.challengerBossDefeated = state.playthrough === 5 && Boolean(save.state.challengerBossDefeated);
+    state.bagBossDefeated = state.playthrough === 5 && Boolean(save.state.bagBossDefeated);
+    state.bagBossActive = state.playthrough === 5 && state.arenaMode && state.challengerBossDefeated
+      && !state.bagBossDefeated && Boolean(save.state.bagBossActive);
     state.challengerBossActive = state.playthrough === 5 && state.arenaMode && !state.arenaRestRoom
       && state.arenaFinalBossDefeated && !state.challengerBossDefeated
       && Boolean(save.state.challengerBossActive);
@@ -643,7 +667,7 @@ function loadGame() {
       ? Math.max(0, Math.floor(save.state.arenaBestWave)) : 0;
     state.challengerDialogOpen = state.playthrough !== 5 && state.arenaMode && state.arenaRestRoom
       && Boolean(save.state.challengerDialogOpen);
-    state.cutscenePhase = ["author", "push", "stand", "light"].includes(save.state.cutscenePhase)
+    state.cutscenePhase = ["author", "push", "stand", "light", ...BAG_STORY.map((scene) => scene.phase)].includes(save.state.cutscenePhase)
       ? save.state.cutscenePhase : "";
     state.cutsceneTimer = Number.isFinite(save.state.cutsceneTimer)
       ? Math.max(0, Math.min(4, save.state.cutsceneTimer)) : 0;
@@ -818,9 +842,10 @@ function loadGame() {
     arenaBossPool.forEach((boss) => { boss.active = false; });
     arenaFinalBoss.active = false;
     challengerBoss.active = false;
+    bagBoss.active = false;
     if (state.arenaMode && !state.arenaRestRoom && !state.cutscenePhase) {
       const combatant = state.elevatorMode ? getElevatorCombatant()
-        : state.challengerBossActive ? challengerBoss : getArenaWaveCombatant();
+        : state.bagBossActive ? bagBoss : state.challengerBossActive ? challengerBoss : getArenaWaveCombatant();
       configureArenaCombatant(combatant, state.elevatorMode ? 45 + state.elevatorWave : state.arenaWave);
       if (combatant === challengerBoss) combatant.color = "#6674d4";
       combatant.hp = combatant.maxHp;
@@ -898,6 +923,11 @@ function loadGame() {
       startChallengerBoss();
       return true;
     }
+    if (state.playthrough === 5 && state.challengerBossDefeated && !state.bagBossDefeated
+      && !state.bagBossActive && !state.cutscenePhase) {
+      beginBagFinale();
+      return true;
+    }
     if (state.playthrough === 5 && !state.arenaMode
       && state.arenaFinalBossDefeated && !state.challengerBossDefeated) {
       state.arenaMode = true;
@@ -943,6 +973,7 @@ function resetGame() {
     arenaMode: false, arenaRestRoom: false, arenaWave: 0, arenaBossActive: false,
     arenaKillsThisWave: 0, arenaFinalBossDefeated: false,
     challengerBossActive: false, challengerBossDefeated: false,
+    bagBossActive: false, bagBossDefeated: false,
     arenaBestWave: 0, challengerDialogOpen: false, playthrough: 1, secretBuffer: "",
     cutscenePhase: "", cutsceneTimer: 0,
     elevatorMode: false, elevatorWave: 0, elevatorKills: 0, elevatorHeight: 0,
@@ -1037,6 +1068,11 @@ function resetGame() {
     x: challengerBoss.startX, y: challengerBoss.startY, hp: challengerBoss.maxHp,
     active: false, attackCooldown: challengerBoss.cooldown, attackWindup: 0,
     stunned: 0, hitFlash: 0, martialMove: "jab", comboIndex: 0,
+  });
+  Object.assign(bagBoss, {
+    x: bagBoss.startX, y: bagBoss.startY, hp: bagBoss.maxHp, active: false,
+    attackCooldown: bagBoss.cooldown, attackWindup: 0, stunned: 0, hitFlash: 0,
+    comboIndex: 0, bagPattern: "fan",
   });
   keys.clear();
   pantsColorInput.value = player.pantsColor;
@@ -1212,6 +1248,10 @@ function buyItem(item) {
 
 function switchDimension() {
   if (state.gameOver || (state.worldReturned && !state.arenaMode) || state.dialog || state.paused) return;
+  if (state.bagBossActive) {
+    setMessage("bag 的黑房間固定為 2D，可以持續向四個方向閃避。");
+    return;
+  }
   if (state.cutscenePhase || state.elevatorMode) {
     if (state.elevatorMode) setMessage("電梯內無法切換維度。");
     return;
@@ -1582,6 +1622,8 @@ function enterArenaMode() {
   state.arenaFinalBossDefeated = false;
   state.challengerBossActive = false;
   state.challengerBossDefeated = false;
+  state.bagBossActive = false;
+  state.bagBossDefeated = false;
   state.challengerDialogOpen = false;
   state.cutscenePhase = "";
   state.elevatorMode = false;
@@ -1612,7 +1654,7 @@ function enterArenaAfterAuthor() {
 
 function arenaChallengeComplete() {
   return state.arenaFinalBossDefeated
-    && (state.playthrough !== 5 || state.challengerBossDefeated);
+    && (state.playthrough !== 5 || state.bagBossDefeated);
 }
 
 function exitArenaMode() {
@@ -1635,6 +1677,7 @@ function exitArenaMode() {
   arenaBossPool.forEach((boss) => { boss.active = false; });
   arenaFinalBoss.active = false;
   challengerBoss.active = false;
+  bagBoss.active = false;
   player.hp = player.maxHp;
   syncRestartControl();
   setMessage("已離開競技場，回到正常世界。");
@@ -1654,6 +1697,7 @@ function enterArenaRestRoom() {
   arenaBossPool.forEach((boss) => { boss.active = false; });
   arenaFinalBoss.active = false;
   challengerBoss.active = false;
+  bagBoss.active = false;
   player.x = 150;
   player.y = 370;
   player.hp = player.maxHp;
@@ -1679,6 +1723,8 @@ function restartArenaAfterDeath() {
   state.arenaFinalBossDefeated = false;
   state.challengerBossActive = false;
   state.challengerBossDefeated = false;
+  state.bagBossActive = false;
+  state.bagBossDefeated = false;
   state.paused = false;
   state.attackTimer = 0;
   state.shieldTimer = 0;
@@ -1741,7 +1787,7 @@ function configureArenaCombatant(combatant, wave) {
 
 function spawnArenaCombatant() {
   const combatant = getArenaWaveCombatant();
-  [...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss, challengerBoss].forEach((item) => { item.active = false; });
+  [...arenaEnemyPool, ...arenaBossPool, arenaFinalBoss, challengerBoss, bagBoss].forEach((item) => { item.active = false; });
   configureArenaCombatant(combatant, state.arenaWave);
   Object.assign(combatant, {
     x: combatant.startX, y: combatant.startY, hp: combatant.maxHp,
@@ -1792,13 +1838,21 @@ function advanceArenaAfterDefeat() {
     return;
   }
   projectiles.length = 0;
+  if (state.bagBossActive) {
+    state.bagBossActive = false;
+    state.bagBossDefeated = true;
+    state.worldReturned = true;
+    player.money += 300;
+    exitArenaMode();
+    setMessage("bag 被擊敗，世界的感染逐漸消退。你終於回到正常世界！");
+    saveGame(false);
+    return;
+  }
   if (state.challengerBossActive) {
     state.challengerBossActive = false;
     state.challengerBossDefeated = true;
     player.money += 150;
-    enterArenaRestRoom();
-    setMessage("你擊敗了格鬥大師挑戰者！五周目競技場真正通關，中央門已開啟。");
-    saveGame(false);
+    beginBagFinale();
     return;
   }
   player.money += state.arenaBossActive ? 35 : 12;
@@ -1827,6 +1881,51 @@ function advanceArenaAfterDefeat() {
   }
 }
 
+function beginBagFinale() {
+  state.arenaMode = true;
+  state.arenaWave = ARENA_TOTAL_WAVES;
+  state.arenaBossActive = false;
+  state.elevatorMode = false;
+  state.arenaRestRoom = false;
+  state.challengerBossActive = false;
+  challengerBoss.active = false;
+  challengerBoss.infected = false;
+  challengerBoss.color = "#5e92bd";
+  state.bagBossActive = false;
+  state.cutscenePhase = BAG_STORY[0].phase;
+  state.cutsceneTimer = BAG_STORY[0].duration;
+  projectiles.length = 0;
+  keys.clear();
+  shop.hidden = true;
+  betting.hidden = true;
+  setMessage(BAG_STORY[0].text);
+  saveGame(false);
+}
+
+function startBagBoss() {
+  state.cutscenePhase = "";
+  state.cutsceneTimer = 0;
+  state.bagBossActive = true;
+  state.arenaRestRoom = false;
+  state.dimension = "2D";
+  state.modeTimer = 0;
+  state.cooldown = 0;
+  configureArenaCombatant(bagBoss, ARENA_TOTAL_WAVES);
+  Object.assign(bagBoss, {
+    x: bagBoss.startX, y: bagBoss.startY, hp: bagBoss.maxHp, active: true,
+    attackCooldown: 1.8, attackWindup: 0, stunned: 0, hitFlash: 0,
+    comboIndex: 0, bagPattern: "fan",
+  });
+  player.x = 180;
+  player.y = 370;
+  player.hp = player.maxHp;
+  player.hurtTimer = 0;
+  projectiles.length = 0;
+  keys.clear();
+  setMessage("bag 的全黑房間：閃避感染彈幕、用盾反製造空檔。擊敗 bag 才能回到正常世界！");
+  saveGame(false);
+}
+
 function beginArenaFinale() {
   state.arenaFinalBossDefeated = true;
   state.arenaRestRoom = false;
@@ -1844,6 +1943,17 @@ function beginArenaFinale() {
 function updateArenaFinale(dt) {
   state.cutsceneTimer = Math.max(0, state.cutsceneTimer - dt);
   if (state.cutsceneTimer > 0) return;
+  const bagScene = BAG_STORY.findIndex((scene) => scene.phase === state.cutscenePhase);
+  if (bagScene >= 0) {
+    const next = BAG_STORY[bagScene + 1];
+    if (next) {
+      state.cutscenePhase = next.phase;
+      state.cutsceneTimer = next.duration;
+      setMessage(next.text);
+      saveGame(false);
+    } else startBagBoss();
+    return;
+  }
   if (state.cutscenePhase === "author") {
     state.cutscenePhase = "push";
     state.cutsceneTimer = 3;
@@ -2397,7 +2507,7 @@ function distanceToEnemy(enemy) {
 function getCombatants() {
   if (state.caveMode) return [];
   if (state.arenaMode) return state.cutscenePhase || state.arenaRestRoom ? [] : state.elevatorMode
-    ? arenaEnemyPool : state.challengerBossActive ? [challengerBoss] : state.arenaBossActive
+    ? arenaEnemyPool : state.bagBossActive ? [bagBoss] : state.challengerBossActive ? [challengerBoss] : state.arenaBossActive
     ? state.arenaWave === ARENA_TOTAL_WAVES ? [arenaFinalBoss] : arenaBossPool
     : arenaEnemyPool;
   if (state.trueFinalMap) return [state.authorRevealed ? authorBoss : trueFinalBoss];
@@ -2588,6 +2698,30 @@ function fireMartialMove(enemy) {
   }
 }
 
+function fireBagPattern(enemy) {
+  const fire = (x, y, vx, vy) => projectiles.push({ x, y, vx, vy,
+    damage: enemy.damage, color: "#f380c7", source: enemy, radius: 8 });
+  const tx = enemy.attackTargetX ?? player.x;
+  const ty = enemy.attackTargetY ?? player.y;
+  if (enemy.bagPattern === "cross") {
+    fire(24, ty, 4.2, 0); fire(W - 24, ty, -4.2, 0);
+    fire(tx, 85, 0, 3.8); fire(tx, H - 35, 0, -3.8);
+    setMessage("bag：感染十字！離開預警線的交會處。");
+  } else if (enemy.bagPattern === "pulse") {
+    for (let i = 0; i < 12; i += 1) {
+      const angle = i * Math.PI / 6;
+      fire(enemy.x, enemy.y, Math.cos(angle) * 3.6, Math.sin(angle) * 3.6);
+    }
+    setMessage("bag：暗黑脈衝！從環形彈幕的空隙穿過。");
+  } else {
+    const aim = Math.atan2(ty - enemy.y, tx - enemy.x);
+    [-0.48, -0.24, 0, 0.24, 0.48].forEach((offset) => {
+      fire(enemy.x, enemy.y, Math.cos(aim + offset) * 4.4, Math.sin(aim + offset) * 4.4);
+    });
+    setMessage("bag：腐蝕扇擊！沿彈幕兩側閃避。");
+  }
+}
+
 function updateEnemy(enemy, dt) {
   if (!enemy.active || enemy.hp <= 0) return;
   const attackType = enemy.attackType || "melee";
@@ -2602,7 +2736,7 @@ function updateEnemy(enemy, dt) {
   const dy = state.dimension === "2D" ? player.y - enemy.y : 0;
   const distance = Math.hypot(dx, dy);
   const movement = Math.sign(dx);
-  if (enemy.attackWindup <= 0 && distance > (["ranged", "shockwave", "void", "author"].includes(attackType) ? 185 : 64)) {
+  if (enemy.attackWindup <= 0 && distance > (["ranged", "shockwave", "void", "author", "bag"].includes(attackType) ? 185 : 64)) {
     enemy.x += movement * enemy.speed * 60 * dt;
     if (state.dimension === "2D") {
       const verticalSpeed = enemy.type === "跳躍者" ? enemy.speed * 2.2 : enemy.speed;
@@ -2615,6 +2749,8 @@ function updateEnemy(enemy, dt) {
     if (enemy.attackWindup <= 0) {
       if (attackType === "author") {
         fireAuthorPattern(enemy);
+      } else if (attackType === "bag") {
+        fireBagPattern(enemy);
       } else if (attackType === "martial") {
         fireMartialMove(enemy);
       } else if (attackType === "ranged") {
@@ -2717,6 +2853,7 @@ function updateEnemy(enemy, dt) {
   } else if (distance < enemy.range && enemy.attackCooldown <= 0) {
     enemy.attackWindup = attackType === "dash" ? 0.28
       : attackType === "author" ? 0.9
+      : attackType === "bag" ? 1.05
       : attackType === "martial" ? 0.65
       : attackType === "smash" ? 0.9
       : attackType === "leap" ? 0.65
@@ -2728,6 +2865,10 @@ function updateEnemy(enemy, dt) {
     if (attackType !== "author") enemy.attackWindup *= 0.9 + style * 0.017;
     enemy.attackTargetX = player.x;
     enemy.attackTargetY = player.y;
+    if (attackType === "bag") {
+      enemy.bagPattern = ["fan", "cross", "pulse"][(enemy.comboIndex || 0) % 3];
+      enemy.comboIndex = (enemy.comboIndex || 0) + 1;
+    }
     if (attackType === "martial") {
       const moves = ["jab", "sweep", "kick", "ki"];
       enemy.martialMove = moves[(enemy.comboIndex || 0) % moves.length];
@@ -3136,6 +3277,13 @@ function drawPortal(x, y, unlocked, color) {
 
 function drawBackground() {
   const twoD = state.dimension === "2D";
+  if (state.bagBossActive) {
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, W, H);
+    drawText("全黑的房間", 24, 105, 16, "#dba0ca");
+    drawText("感染之源 bag・擊敗他才能回到正常世界", 24, 130, 13, "#b9a4b6");
+    return;
+  }
   drawAmbientBackdrop();
   if (state.caveMode) {
     ctx.fillStyle = "#130e1eeb";
@@ -3489,6 +3637,7 @@ function drawEnemy() {
       void: "#b58cff",
       author: "#ffd28a",
       martial: "#9ad9ff",
+      bag: "#f380c7",
       ranged: "#e7d35f",
       leap: "#8ce0b0",
     }[enemy.attackType] || "#ff9b9f";
@@ -3519,6 +3668,19 @@ function drawEnemy() {
         ctx.lineTo(enemy.attackTargetX ?? player.x, enemy.attackTargetY ?? player.y);
         ctx.stroke();
       }
+    } else if (enemy.attackType === "bag") {
+      const tx = enemy.attackTargetX ?? player.x;
+      const ty = enemy.attackTargetY ?? player.y;
+      ctx.beginPath();
+      if (enemy.bagPattern === "cross") {
+        ctx.moveTo(24, ty); ctx.lineTo(W - 24, ty);
+        ctx.moveTo(tx, 85); ctx.lineTo(tx, H - 35);
+      } else if (enemy.bagPattern === "pulse") {
+        ctx.arc(enemy.x, enemy.y, 110, 0, Math.PI * 2);
+      } else {
+        ctx.moveTo(enemy.x, enemy.y); ctx.lineTo(tx, ty);
+      }
+      ctx.stroke();
     } else if (enemy.attackType === "martial") {
       ctx.beginPath();
       if (enemy.martialMove === "ki" || enemy.martialMove === "kick") {
@@ -3615,6 +3777,14 @@ function drawEnemy() {
     ctx.fillRect(-enemy.size / 2 - 9, -1, 12, 14);
     ctx.fillRect(enemy.size / 2 - 3, -1, 12, 14);
   }
+  if (enemy === bagBoss) {
+    ctx.fillStyle = "#0b030b";
+    ctx.fillRect(-enemy.size / 2 + 7, -enemy.size / 2 + 8, enemy.size - 14, enemy.size - 16);
+    ctx.fillStyle = "#ff79c3";
+    ctx.fillRect(-15, -8, 10, 5);
+    ctx.fillRect(5, -8, 10, 5);
+    ctx.fillRect(-8, 9, 16, 3);
+  }
   if (frostEnemies.includes(enemy)) {
     ctx.fillStyle = "#d9f8ff";
     ctx.beginPath();
@@ -3649,6 +3819,7 @@ function drawEnemy() {
     dimension: "維度突襲！",
     void: "虛空裂變！",
     martial: ({ jab: "連拳！", sweep: "掃腿！", kick: "飛踢！", ki: "氣勁掌波！" })[enemy.martialMove] || "格鬥連擊！",
+    bag: ({ fan: "腐蝕扇擊！", cross: "感染十字！", pulse: "暗黑脈衝！" })[enemy.bagPattern] || "感染攻擊！",
     author: ({ fan: "扇形彈幕！", lanes: "橫向彈幕！", ring: "環形彈幕！", flip: "畫面翻轉！", rift: "垂直裂隙！", echo: "雙側虛影！" })[enemy.attackPattern] || "作者攻擊！",
   }[enemy.attackType];
   const warningText = `${attackLabel || "攻擊！"} ${enemy.attackWindup.toFixed(1)}秒`;
@@ -3657,6 +3828,7 @@ function drawEnemy() {
     const maxWindup = enemy.attackType === "shockwave" ? 1.05
       : enemy.attackType === "author" ? 0.9
       : enemy.attackType === "martial" ? 0.82
+      : enemy.attackType === "bag" ? 1.05
       : enemy.attackType === "smash" ? 0.9
       : enemy.attackType === "leap" ? 0.65
       : enemy.attackType === "ranged" ? 0.75
@@ -3772,6 +3944,7 @@ function drawFrostSeals() {
 }
 
 function drawShards() {
+  if (state.arenaMode) return;
   if (state.caveMode || state.dimension !== "2D" || state.nextMap || state.sanctumMap || state.frostMap || state.voidMap) return;
   shards.forEach((shard) => {
     if (shard.collected) return;
@@ -3794,7 +3967,8 @@ function getCurrentObjective() {
   if (state.cutscenePhase) return "劇情進行中";
   if (state.elevatorMode) return `電梯第 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES} 波：敵人 ${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`;
   if (state.caveMode) return state.remoteTradeUnlocked ? "洞穴：H 商店、G 賭桌；左側出口按 F" : "靠近倖存者並按 F 取得補給能力";
-  if (state.arenaRestRoom && arenaChallengeComplete()) return state.playthrough === 5 ? "格鬥大師已擊敗：從中央門返回" : "競技場完成：與挑戰者對話或從中央門返回";
+  if (state.bagBossActive) return "擊敗感染之源 bag，回到正常世界";
+  if (state.arenaRestRoom && arenaChallengeComplete()) return state.playthrough === 5 ? "bag 已擊敗：從中央門返回" : "競技場完成：與挑戰者對話或從中央門返回";
   if (state.arenaRestRoom) return state.playthrough === 5 ? "五周目感染休息室：中央門挑戰" : state.playthrough === 2 && state.authorBossDefeated
     ? "休息室：挑戰者對話、商人補給、中央門進三周目"
     : "休息室：挑戰者對話、商人補給、中央門挑戰";
@@ -3872,7 +4046,7 @@ function drawHud() {
   const extra = currentExtraMap();
   const mapLabel = state.caveMode ? "倖存者洞穴" : state.elevatorMode ? "上升電梯" : state.arenaRestRoom ? "休息室" : state.arenaMode ? "競技場" : state.trueFinalMap ? "維度核心" : extra ? `地圖 ${extra.index + 5}` : state.voidMap ? "地圖 5" : state.frostMap ? "地圖 4" : state.sanctumMap ? "地圖 3" : state.nextMap ? "地圖 2" : state.playthrough === 4 ? "第一世界" : "地圖 1";
   drawText(`${mapLabel}${state.playthrough === 5 ? "・五周目" : state.playthrough === 4 ? "・四周目" : state.playthrough === 3 ? "・三周目" : state.playthrough === 2 ? "・二周目" : ""}`, 150, 30, 13, state.trueFinalMap ? "#f9a6eb" : state.voidMap ? "#c6a7ff" : state.frostMap ? "#b9f3ff" : state.sanctumMap ? "#f1d78a" : state.nextMap ? "#d8a9d1" : "#9da5d4");
-  const ability = state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
+  const ability = state.bagBossActive ? "2D 持續" : state.modeTimer > 0 ? `2D ${Math.ceil(state.modeTimer)}s` : state.cooldown > 0 ? `冷卻 ${Math.ceil(state.cooldown)}s` : "C 可用";
   drawText(ability, 24, 54, 13, "#a8acc2");
   const swordStatus = state.swordCooldown > 0 ? `${state.swordCooldown.toFixed(1)}s` : "可用";
   const shieldStatus = !state.hasShield ? "未取得" : state.shieldCooldown > 0 ? `${state.shieldCooldown.toFixed(1)}s` : "可用";
@@ -3904,6 +4078,7 @@ function drawHud() {
   const progress = state.caveMode ? "倖存者" : state.playthrough === 4 && inFirstMap() && !state.merchantDefeated ? "感染商人"
     : state.elevatorMode ? `電梯 ${state.elevatorWave} / ${ELEVATOR_TOTAL_WAVES}・${state.elevatorKills} / ${ELEVATOR_ENEMIES_PER_WAVE}`
     : state.arenaRestRoom ? (arenaChallengeComplete() ? "真・最終 Boss 已擊敗" : state.arenaWave === 0 ? "準備挑戰" : `第 ${state.arenaWave} 波完成`)
+    : state.bagBossActive ? "黑房間・bag 決戰"
     : state.challengerBossActive ? "格鬥大師挑戰者"
     : state.arenaMode ? (state.arenaBossActive ? `第 ${state.arenaWave} 波 Boss` : `第 ${state.arenaWave} 波 ${state.arenaKillsThisWave} / ${ARENA_ENEMIES_PER_WAVE}`)
     : state.trueFinalMap ? (!state.trueFinalBossDefeated ? "維度之源" : state.authorRevealed && !state.authorBossDefeated ? "作者" : "回歸之門")
@@ -3936,6 +4111,7 @@ function drawHud() {
       void: "虛空裂變",
       author: "彈幕・畫面翻轉",
       martial: "連拳・掃腿・飛踢・氣勁",
+      bag: "腐蝕扇擊・感染十字・暗黑脈衝",
     }[target.attackType];
     if (attackStyle) {
       drawText(`攻擊模式：${attackStyle}`, W / 2, 162, 12, "#f4d18d", "center");
@@ -4041,7 +4217,71 @@ function drawCutsceneActor(x, y, color, label) {
   drawText(label, x, y - 72, 15, "#f4f0df", "center");
 }
 
+function drawBagFinale() {
+  const index = BAG_STORY.findIndex((scene) => scene.phase === state.cutscenePhase);
+  const scene = BAG_STORY[index];
+  if (!scene) return;
+  const progress = Math.max(0, Math.min(1, 1 - state.cutsceneTimer / scene.duration));
+  ctx.save();
+  ctx.fillStyle = index >= 6 ? "#000000" : "#211329";
+  ctx.fillRect(0, 0, W, H);
+  if (index < 6) {
+    ctx.fillStyle = "#39243e";
+    ctx.fillRect(0, 390, W, 150);
+    ctx.strokeStyle = "#8495b9";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(120, 170, 210, 220);
+    ctx.fillStyle = "#101520";
+    ctx.fillRect(130, 180, 190, 205);
+  }
+  const protagonistX = index === 6 ? 480 + progress * 140 : index >= 7 ? 330 : 480;
+  drawCutsceneActor(protagonistX, 370, player.shirtColor, "主角");
+  if (index >= 2) {
+    ctx.fillStyle = "#e7f5ff";
+    ctx.fillRect(protagonistX + 28, 290, 7, 60);
+    ctx.fillStyle = "#d7ac65";
+    ctx.fillRect(protagonistX + 18, 344, 27, 7);
+  }
+  if (index <= 5) {
+    const friendX = index < 4 ? 350 : index === 4 ? 350 - progress * 125 : 225;
+    drawCutsceneActor(friendX, 370, "#5e92bd", "挑戰者");
+    if (index === 5) {
+      // Doors close after the challenger has finished cheering.
+      const closure = Math.max(0, (progress - 0.7) / 0.3);
+      ctx.fillStyle = "#52617e";
+      ctx.fillRect(130, 180, 95 * closure, 205);
+      ctx.fillRect(320 - 95 * closure, 180, 95 * closure, 205);
+    }
+  }
+  if (index >= 1) {
+    const bagX = index === 4 ? 765 - Math.min(1, progress * 3) * 375 : index >= 6 ? 700 : 765;
+    drawCutsceneActor(bagX, 370, "#b64b9b", "bag・感染之源");
+    if (index === 4 && progress > 0.25) {
+      ctx.strokeStyle = "#ff91d4";
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(bagX - 25, 340); ctx.lineTo(350 - progress * 125, 340); ctx.stroke();
+    }
+  }
+  if (index === 6) {
+    ctx.strokeStyle = "#d85ead";
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(700, 340); ctx.lineTo(protagonistX, 340); ctx.stroke();
+  }
+  drawText(index === 0 ? "挑戰者恢復正常" : index >= 6 ? "bag 的全黑房間" : "感染世界的幕後黑手", W / 2, 90, 28, "#f0bedf", "center");
+  ctx.fillStyle = "#09070fed";
+  ctx.fillRect(65, 440, 830, 78);
+  ctx.strokeStyle = "#be6eaa";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(65, 440, 830, 78);
+  drawText(scene.text, W / 2, 482, 17, "#f4f0df", "center");
+  ctx.restore();
+}
+
 function drawArenaFinale() {
+  if (state.cutscenePhase.startsWith("bag_")) {
+    drawBagFinale();
+    return;
+  }
   const phase = state.cutscenePhase;
   ctx.save();
   ctx.fillStyle = phase === "light" ? "#151f37" : "#171524";
@@ -4143,7 +4383,7 @@ function draw() {
     ctx.fillStyle = "#102b24dd";
     ctx.fillRect(0, 0, W, H);
     drawText("返回正常世界", W / 2, H / 2 - 16, 38, "#8ce0b0", "center");
-    drawText(state.authorBossDefeated ? "作者已被擊敗・真正回到正常世界" : state.voidBossDefeated ? "十一張地圖全部完成・終焉核心已重啟" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
+    drawText(state.bagBossDefeated ? "bag 已被擊敗・世界的感染逐漸消退" : state.authorBossDefeated ? "作者已被擊敗・真正回到正常世界" : state.voidBossDefeated ? "十一張地圖全部完成・終焉核心已重啟" : "冒險完成", W / 2, H / 2 + 24, 16, "#f4f0df", "center");
   }
   if (state.gameOver) {
     ctx.fillStyle = "#080912e8";
